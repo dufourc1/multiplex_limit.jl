@@ -1,0 +1,14 @@
+name = "multiplex_limit"
+uuid = "059162a1-7293-4ce2-8f6a-544ae95c106f"
+authors = ["Charles Dufour"]
+version = "1.0.0-DEV"
+
+[compat]
+julia = "1.10"
+
+[extras]
+Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Aqua", "Test"]
