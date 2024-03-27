@@ -14,25 +14,7 @@ global_logger(debug_logger)
 
 include("utils.jl")
 
-function edge_list_to_adjs(edge_lists = [
-        "data/malaria_data/HVR_1.txt",
-        "data/malaria_data/HVR_5.txt",
-        "data/malaria_data/HVR_6.txt"])
-    M = length(edge_lists)
 
-    edges = [readdlm(e, ',', Int, '\n') for e in edge_lists]
-    n = maximum([maximum(edges[i]) for i in eachindex(edges)])
-
-    A = Array{Int, 3}(undef, n, n, M)
-    A .= 0
-    for i in 1:M
-        for e in eachrow(edges[i])
-            A[e[1], e[2], i] = 1
-            A[e[2], e[1], i] = 1
-        end
-    end
-   return A
-end
 
 path_to_data = "data/malaria_data/"
 nums_to_analyze = collect(1:9) #
@@ -67,7 +49,7 @@ size_plot = 600
 p = heatmap(corr_matrix, xlabel = "Network", ylabel = "Network", aspect_ratio = :equal,
     size = (size_plot-5, size_plot+1), xlims = (0.5, size(corr_matrix, 1) + 0.5),
     ylims = (0.5, size(corr_matrix, 2) + 0.5))
-plot!(p, some_rects[:, 1], some_rects[:, 2], label = "Zhang et al., 2024",
+plot!(p, from_paper[:, 1], some_rects[:, 2], label = "Zhang et al., 2024",
     line = :green, lw = 2,)
 plot!(p, top_corr[:, 1], top_corr[:, 2],
     label = "top $(size(top_corr,1)÷6)", line = :red, lw = 2)
@@ -80,16 +62,6 @@ plot(history.history)
 moments, indices = NetworkHistogram.get_moment_representation(estimated)
 
 
-function get_p_matrix(θ, node_labels)
-    n = length(node_labels)
-    pij = zeros(n, n)
-    for i in 1:n
-        for j in 1:n
-            pij[i, j] = θ[node_labels[i], node_labels[j]]
-        end
-    end
-    return pij
-end
 
 p_moms = []
 plots_pij = []
