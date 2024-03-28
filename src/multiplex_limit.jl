@@ -45,8 +45,8 @@ function random_multiplexon(num_groups::Int, num_layers::Int)
 end
 
 
-function Base.rand(s::Multiplexon, n::Int = 1, latents = rand(Categorical(s.π), n))
-    x = Array{Int}(undef, n, n, s.num_layers)
+function Base.rand(s::Multiplexon, n::Int = 1, latents = rand(Categorical(s.π), n),
+        x = Array{Int}(undef, n, n, s.num_layers))
     for i in 1:n
         for j in 1:n
             if i == j
@@ -54,6 +54,22 @@ function Base.rand(s::Multiplexon, n::Int = 1, latents = rand(Categorical(s.π),
             else
                 x[i, j, :] .= rand(s.θ[latents[i], latents[j]])
                 x[j, i, :] .= x[i, j, :]
+            end
+        end
+    end
+    return x, latents
+end
+
+
+function Base.rand(s::Multiplexon, n::Int = 1, latents = rand(Categorical(s.π), n),
+        x = Array{Vector{Int}}(undef, n, n))
+    for j in 1:n
+        for i in 1:n
+            if i == j
+                x[i, j] = zeros(Int, s.num_layers)
+            else
+                x[i, j] = rand(s.θ[latents[i], latents[j]])
+                x[j, i] = x[i, j]
             end
         end
     end
