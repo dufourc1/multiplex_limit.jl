@@ -61,20 +61,32 @@ function Base.rand(s::Multiplexon, n::Int = 1, latents = rand(Categorical(s.π),
 end
 
 
-function Base.rand(s::Multiplexon, n::Int = 1, latents = rand(Categorical(s.π), n),
-        x = Array{Vector{Int}}(undef, n, n))
-    for j in 1:n
-        for i in 1:n
-            if i == j
-                x[i, j] = zeros(Int, s.num_layers)
-            else
-                x[i, j] = rand(s.θ[latents[i], latents[j]])
-                x[j, i] = x[i, j]
-            end
+# function Base.rand(s::Multiplexon, n::Int = 1, latents = rand(Categorical(s.π), n),
+#         x = Array{Vector{Int}}(undef, n, n))
+#     for j in 1:n
+#         for i in 1:n
+#             if i == j
+#                 x[i, j] = zeros(Int, s.num_layers)
+#             else
+#                 x[i, j] = rand(s.θ[latents[i], latents[j]])
+#                 x[j, i] = x[i, j]
+#             end
+#         end
+#     end
+#     return x, latents
+# end
+
+
+
+function get_matrix_moment(model::multiplex_limit.Multiplexon, moment_index)
+    k = length(model.π)
+    moment = Matrix{Float64}(undef, k, k)
+    for i in 1:k
+        for j in 1:k
+            moment[i, j] = model.θ[i, j].ordinary_moments[moment_index + 1]
         end
     end
-    return x, latents
+    return moment
 end
-
 
 end
