@@ -5,6 +5,7 @@ using DelimitedFiles
 using Plots
 using Statistics
 using LinearAlgebra
+using MVBernoulli
 
 using Logging
 debug_logger = ConsoleLogger(stderr, Logging.Debug)
@@ -12,9 +13,9 @@ global_logger(debug_logger)
 
 include("utils.jl")
 
-n = 1000
+n = 100
 
-model = multiplex_limit.random_multiplexon(10, 3)
+model = multiplex_limit.random_multiplexon(10, 2)
 latents = orderered_latents(n, model.π)
 A, ξ = rand(model, n, latents)
 
@@ -66,3 +67,19 @@ end
 for i in 1:length(indices)
     display(plot(plots_pij[i], plots_truth[i], layout = (1, 2), size = (1200, 600)))
 end
+
+
+corrs = MVBernoulli.correlation_matrix.(model.θ)
+index_one = MVBernoulli.binary_vector_to_index(ones(Int, length(A[1,1,:])))
+index_zero = MVBernoulli.binary_vector_to_index(zeros(Int, length(A[1, 1, :])))
+
+proba_ones = vcat([vcat([model.θ[i, j].tabulation.p[index_one] for j in i:size(model.θ, 1)]...)
+                   for i in 1:size(model.θ, 1)]...)
+proba_zeros = vcat([vcat([model.θ[i, j].tabulation.p[index_zero] for j in i:size(model.θ, 1)]...)
+                   for i in 1:size(model.θ, 1)]...)
+
+corr_12 = [c[1,2] for c in vec(corrs)]
+plot_corr_vs_proba = scatter(corr_12, proba_zeros, label = "probability of 0")
+scatter!(plot_corr_vs_proba, corr_12, proba_ones, label = "probability of 1")
+plot!(plot_corr_vs_proba, ylabel = "Probability", xlabel = "Correlation x_1 and x_2", legend = :topright)
+display(plot_corr_vs_proba)
