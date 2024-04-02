@@ -9,6 +9,7 @@ struct Multiplexon{T}
     num_layers::Int
 end
 
+
 function Multiplexon(θ::Matrix{MultivariateBernoulli{T}}, π::Vector{T},
         num_layers::Int = size(θ[1, 1], 1)) where {T}
     if size(θ, 1) != size(θ, 2)

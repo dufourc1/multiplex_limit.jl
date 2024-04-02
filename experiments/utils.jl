@@ -72,5 +72,9 @@ end
 function orderered_latents(n,π)
     k = length(π)
     n_per_group = round.(Int, n .* π)
-    return vcat([ones(Int, n_per_group[i]) .* i for i in 1:k]...)
+    latents = vcat([ones(Int, n_per_group[i]) .* i for i in 1:k]...)
+    if length(latents) > n
+        latents = latents[1:n]
+    end
+    return latents
 end
