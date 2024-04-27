@@ -79,3 +79,9 @@ plot_corr_vs_proba = scatter(corr_12, proba_zeros, label = "probability of 0")
 scatter!(plot_corr_vs_proba, corr_12, proba_ones, label = "probability of 1")
 plot!(plot_corr_vs_proba, ylabel = "Probability", xlabel = "Correlation x_1 and x_2", legend = :topright)
 display(plot_corr_vs_proba)
+
+
+
+function biclustering_algorithm(A::Matrix{T}; lower_bound=0.0, upper_bound=1.0, num_clusters = NetworkHistogram.select_bandwidth(A))
+    @error "not implemented yet"
+end

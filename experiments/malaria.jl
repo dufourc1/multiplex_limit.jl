@@ -7,6 +7,7 @@ using DelimitedFiles
 using Plots
 using Statistics
 using LinearAlgebra
+using MVBernoulli
 
 using Logging
 debug_logger = ConsoleLogger(stderr, Logging.Debug)
@@ -49,15 +50,18 @@ size_plot = 600
 p = heatmap(corr_matrix, xlabel = "Network", ylabel = "Network", aspect_ratio = :equal,
     size = (size_plot-5, size_plot+1), xlims = (0.5, size(corr_matrix, 1) + 0.5),
     ylims = (0.5, size(corr_matrix, 2) + 0.5))
-plot!(p, from_paper[:, 1], some_rects[:, 2], label = "Zhang et al., 2024",
+plot!(p, from_paper[:, 1], from_paper[:, 2], label = "Zhang et al., 2024",
     line = :green, lw = 2,)
 plot!(p, top_corr[:, 1], top_corr[:, 2],
     label = "top $(size(top_corr,1)÷6)", line = :red, lw = 2)
 plot!(p, legend = :outerbottom, legendcolumns = 1, dpi=600, title = "Pseudo correlation between networks")
 display(p)
 
-estimated, history = graphhist(A; starting_assignment_rule = EigenStart(), maxitr = Int(1e8), stop_rule = PreviousBestValue(10000))
-plot(history.history)
+estimated, history = graphhist(A;
+                               starting_assignment_rule = EigenStart(),
+                               maxitr = Int(1e8),
+                               stop_rule = PreviousBestValue(10000))
+display(plot(history.history))
 
 moments, indices = NetworkHistogram.get_moment_representation(estimated)
 
@@ -178,3 +182,42 @@ width_plot = 400
 display(plot([plots_pij_unscaled[i] for i in indices_commonly_used_networks]..., layout = l, size = (3*(width_plot+1), width_plot), margin = 5Plots.mm))
 display(plot([p_moms[i] for i in indices_commonly_used_networks]...,
     layout = l, size = (3 * (width_plot + 1), width_plot), margin = 5Plots.mm))
+
+
+#todo: create model from estimated moments
+berns = Matrix{MVBernoulli.MultivariateBernoulli}(undef, 24,24)
+
+for j in 1:24
+    for i in 1:24
+        vec_proba = Vector{Float64}(undef, length(moments[1, 1, :])+1)
+        vec_proba[1]= 1.0
+        for k in 1:length(moments[1, 1, :])
+            vec_proba[k+1] = moments[i, j, k]
+        end
+        tabulation = MVBernoulli._ordinary_moments_to_tabulation(vec_proba)
+        for k in 1:length(tabulation)
+            if tabulation[k] < 0
+                tabulation[k] = 1e-15
+            end
+        end
+        tabulation ./= sum(tabulation)
+        berns[i, j] = MVBernoulli.from_tabulation(tabulation)
+    end
+end
+
+corrs = MVBernoulli.correlation_matrix.(berns)
+index_one = MVBernoulli.binary_vector_to_index(ones(Int, length(A[1, 1, :])))
+index_zero = MVBernoulli.binary_vector_to_index(zeros(Int, length(A[1, 1, :])))
+
+proba_ones = vcat([vcat([berns[i, j].tabulation.p[index_one] for j in i:size(berns, 1)]...)
+                for i in 1:size(berns, 1)]...)
+proba_zeros = vcat([vcat([berns[i, j].tabulation.p[index_zero]
+                        for j in i:size(berns, 1)]...)
+                for i in 1:size(berns, 1)]...)
+
+corr_12 = [c[1, 2] for c in vec(corrs)]
+plot_corr_vs_proba = scatter(corr_12, proba_zeros, label = "probability of 0")
+scatter!(plot_corr_vs_proba, corr_12, proba_ones, label = "probability of 1")
+plot!(plot_corr_vs_proba, ylabel = "Probability",
+xlabel = "Correlation x_1 and x_2", legend = :topright)
+display(plot_corr_vs_proba)
