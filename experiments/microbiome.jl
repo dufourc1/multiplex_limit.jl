@@ -41,7 +41,7 @@ end
 
 
 indices_studied = [4, 15, 14, 2, 1, 5, 18, 7, 9]
-indices_studied = collect(1:num_layers)
+#indices_studied = collect(1:num_layers)
 A_to_study = A[:, :, indices_studied]
 println(list_names[indices_studied])
 

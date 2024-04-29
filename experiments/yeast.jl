@@ -64,7 +64,7 @@ for (i, index) in enumerate(indices)
                 [], false)))
     push!(plots_pij,
         heatmap(
-            get_p_matrix(moments[:, :, i], estimated.node_labels), clims = (0, 1), xformatter = _ -> "",
+            get_p_matrix(moments[:, :, i], estimated.node_labels), xformatter = _ -> "",
             yformatter = _ -> "", xlabel = "Moment $index", aspect_ratio = :equal, axis = (
                 [], false)))
 end
@@ -79,12 +79,12 @@ end
 
 indices_interesting_moments = []
 for i in eachindex(indices)
-    if maximum(moments[:, :, i]) > 0.1
+    if maximum(moments[:, :, i]) > 0
         push!(indices_interesting_moments, i)
     end
 end
 println(length(indices_interesting_moments))
 
 for i in indices_interesting_moments
-    display(plot(plots_pij[i]))
+    display(plot(p_moms[i]))
 end

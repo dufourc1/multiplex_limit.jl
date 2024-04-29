@@ -64,7 +64,7 @@ for (i, index) in enumerate(indices)
                 [], false)))
     push!(plots_pij,
         heatmap(
-            get_p_matrix(moments[:, :, i], estimated.node_labels), clims = (0, 1), xformatter = _ -> "",
+            get_p_matrix(moments[:, :, i], estimated.node_labels), xformatter = _ -> "",
             yformatter = _ -> "", xlabel = "Moment $index", aspect_ratio = :equal, axis = (
                 [], false)))
 end

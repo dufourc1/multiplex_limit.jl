@@ -61,9 +61,58 @@ estimated, history = graphhist(A;
                                starting_assignment_rule = EigenStart(),
                                maxitr = Int(1e8),
                                stop_rule = PreviousBestValue(10000))
-display(plot(history.history))
+#display(plot(history.history))
 
 moments, indices = NetworkHistogram.get_moment_representation(estimated)
+
+
+permutation = sortperm(estimated.node_labels)
+
+white_lines = []
+permuted_node_labels = estimated.node_labels[permutation]
+for (index, label) in enumerate(permuted_node_labels[2:end])
+    if label != permuted_node_labels[index]
+        push!(white_lines, index)
+    end
+end
+
+
+p_networks_permuted = []
+p_networks = []
+p_probs = []
+for i in 1:size(A, 3)
+    p = heatmap(
+        A[:, :, i][permutation, permutation], clims = (0, 1), legend = :none,
+        xlabel = "$(list_names[i])", xformatter = _ -> "",
+        yformatter = _ -> "")
+    p2 = heatmap(
+        A[:, :, i], clims = (0, 1), legend = :none,
+        xlabel = "$(list_names[i])", xformatter = _ -> "",
+        yformatter = _ -> "")
+    p3 = heatmap(
+        get_p_matrix(moments[:, :, i], estimated.node_labels),
+        legend = :none,
+        xlabel = "$(list_names[i])", xformatter = _ -> "",
+        yformatter = _ -> "")
+    for line in white_lines
+        #plot!(p, [line, line], [0, n], color = :white, linewidth = 0.5)
+        #plot!(p, [0, n], [line, line], color = :white, linewidth = 0.5)
+        #plot!(p2, [line, line], [0, n], color = :white, linewidth = 0.5)
+        #plot!(p2, [0, n], [line, line], color = :white, linewidth = 0.5)
+    end
+    plot!(p, xlims = (0.5, n + 0.5), ylims = (0.5, n + 0.5))
+    plot!(p2, xlims = (0.5, n + 0.5), ylims = (0.5, n + 0.5))
+    plot!(p3, xlims = (0.5, n + 0.5), ylims = (0.5, n + 0.5))
+    push!(p_networks_permuted, p)
+    push!(p_probs, p3)
+    push!(p_networks, p2)
+    display(plot(p3,p2,p, layout = (1,3), size = (1200, 400)))
+    #display(plot(p, p2))
+end
+
+display(plot(p_networks_permuted..., size = (1200, 1200)))
+display(plot(p_networks..., size = (1200, 1200)))
+display(plot(p_probs...,size = (1200, 1200)))
 
 
 
