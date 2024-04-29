@@ -182,20 +182,28 @@ worldCountries = GeoJSON.read(read(
     Downloads.download("https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson"),
     String))
 
+##
+
 lons = -180:180
 lats = -90:90
 field = [exp(cosd(l)) + 3(y / 90) for l in lons, y in lats]
+#field = [0 for l in lons, y in lats]
 
 fig = Figure(size = (1200, 800), fontsize = 22)
+#colorscheme = :Paired_12
+colorscheme = :tab20c
 
 ax = GeoAxis(
     fig[1, 1];
     dest = "+proj=wintri",
-    title = "World Countries",
-    tellheight = true
-)
+    title = "Trade network clustering, 2010",
+    tellheight = false,
+    yticklabelsvisible = false,
+    xticklabelsvisible = false)
 
-hm1 = Makie.surface!(ax, lons, lats, field; shading = NoShading)
+# add blue image for background (ocean)
+hm1 = Makie.surface!(ax, lons, lats, (x,y)->0; shading = NoShading,
+    colormap = :oslo, alpha = 0.1, colorange = (-2, 6))
 Makie.translate!(hm1, 0, 0, -10)
 
 poly!(
@@ -215,13 +223,13 @@ end
 hm2 = poly!(
     ax, GeoJSON.FeatureCollection(features=countries_to_plot);
     color = colors,
-    colormap = :tab20c,
+    colormap = colorscheme,
     strokecolor = :black,
     strokewidth = 0.25
 )
 
 cb = Colorbar(fig[1, 2]; colorrange = (1, n_groups),
-    colormap = cgrad(:tab20c, n_groups, categorical = true),
+    colormap = cgrad(colorscheme, n_groups, categorical = true),
     label = "Group", height = Relative(0.65))
-
+save("experiments/trade_networks.png", fig, px_per_unit = 2)
 fig
