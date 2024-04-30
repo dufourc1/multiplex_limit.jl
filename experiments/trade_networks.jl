@@ -1,5 +1,4 @@
 using NetworkHistogram, Statistics
-using Plots
 using DataFrames, Countries
 using Makie, CairoMakie, GeoMakie
 import Downloads
@@ -109,24 +108,23 @@ for i in 1:size(moments,3)
 end
 A_permuted = A[permutation, permutation, :]
 P_permuted = P[permutation, permutation, :]
-
+node_names_permuted = node_names[permutation]
 
 function plot_pairs_adjacency_probs(A,P)
     p_networks = []
     p_probs = []
     for i in 1:size(A, 3)
-        plot_graph = Plots.heatmap(
-            A[:, :, i], clims = (0, 1), legend = :none,
-            xformatter = _ -> "",
-            yformatter = _ -> "")
-        plot_probs = Plots.heatmap(
-            P[:, :, i], clims = (0, 1), legend = :none,
-            xformatter = _ -> "",
-            yformatter = _ -> "")
-        push!(p_networks, plot_graph)
-        push!(p_probs, plot_probs)
-        #display(plot(plot_graph, plot_probs, layout = (1, 2),
-        #    size = (800, 400), bottom_margin = 4Plots.mm))
+        f = Figure()
+        ax = Axis(f[1, 1])
+        Makie.heatmap!(ax, A[:, :, i], colorrange = (0, 1))
+        hidedecorations!(ax)
+        push!(p_networks, f)
+
+        f2 = Figure()
+        ax2, hm = Makie.heatmap(f2[1, 1], P[:, :, i], colorrange = (0, 1))
+        hidedecorations!(ax2)
+        Colorbar(f2[:, end + 1], hm)
+        push!(p_probs, f2)
     end
     return p_networks, p_probs
 end
@@ -137,7 +135,9 @@ plot_networks_permuted, plot_probs_permuted = plot_pairs_adjacency_probs(A_permu
 
 
 for i in 1:size(A, 3)
-    display(Plots.plot(plot_networks_permuted[i],
+    fig = Figure()
+
+    display(plot(plot_networks_permuted[i],
                 plot_probs_permuted[i], layout = (1, 2),
             size = (800, 400), bottom_margin = 4Plots.mm, suptitle = list_names[i]))
 end
@@ -206,18 +206,22 @@ country_cluster = estimated.node_labels
 ##
 #plot the trade network by sorting wrt to continent
 node_ordering_continent = sortperm(continents)
+A_continent =  A[node_ordering_continent,node_ordering_continent,:]
+P_continent = P[node_ordering_continent,node_ordering_continent,:]
+node_labels_continent = estimated.node_labels[node_ordering_continent]
+
+
 plot_networks_continent, plot_probs_continents = plot_pairs_adjacency_probs(
-    A[node_ordering_continent,node_ordering_continent,:], P[node_ordering_continent,node_ordering_continent,:])
+   A_continent, P_continent)
 
 #now sort by degree inside each continent
 
-white_lines = []
-node_labels_continent = estimated.node_labels[node_ordering_continent]
+white_lines_continent = []
 sorted_continents = continents[node_ordering_continent]
 previous = sorted_continents[1]
 for (index, label) in enumerate(sorted_continents[2:end])
     if label != previous
-        push!(white_lines, index)
+        push!(white_lines_continent, index)
     end
     previous = label
 end
