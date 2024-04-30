@@ -1,5 +1,11 @@
-using NetworkHistogram
+using NetworkHistogram, Statistics
 using Plots
+using DataFrames, Countries
+using Makie, CairoMakie, GeoMakie
+import Downloads
+using GeoMakie.GeoJSON
+using GeometryBasics
+using GeoMakie.GeoInterface
 
 include("utils.jl")
 
@@ -56,9 +62,17 @@ end
 
 # preprocessing as in "Latent space models for multiplex networks"
 layers_dense = findall(vec(sum(A_all, dims = (1, 2))) ./ (max_edges_per_layer * 2) .≥ 0.1)
-nodes_dense = findall(vec(sum(A_all[:,:, layers_dense], dims = (2,3))) .≥5*length(layers_dense))
-nodes_dense = filter(x -> x!= 93, nodes_dense) # remove the node 93: unspecified country
+A_layers = A_all[:,:,layers_dense]
 
+nodes_dense = findall(vec(sum(A_layers, dims = (2, 3))) .≥
+                      5 * size(A_layers, 3))
+nodes_dense = filter(x -> x != 93, nodes_dense) # remove the node 93: unspecified country
+
+picked_layer = nothing
+if !isnothing(picked_layer)
+    nodes_dense = filter( x -> sum(A_layers[x, :, picked_layer]) > 0, nodes_dense)
+    layers_dense = picked_layer
+end
 
 A = A_all[nodes_dense, nodes_dense, layers_dense]
 A_weights = A_weights_all[nodes_dense, nodes_dense, layers_dense]
@@ -66,27 +80,27 @@ list_names = list_names_all[layers_dense]
 node_names = node_names_all[nodes_dense]
 n = size(A, 1)
 
+
+
+
 # fit the model
-estimated, history = graphhist(A;
+estimator, history = graphhist(A;
     starting_assignment_rule = EigenStart(),
-    maxitr = Int(1e7),
-    stop_rule = PreviousBestValue(1000))
+    maxitr = Int(1e8),
+    stop_rule = PreviousBestValue(10000))
 #display(plot(history.history))
+
+
+best_smoothed, bic_values = NetworkHistogram.get_best_smoothed_estimator(estimator, A)
+
+#estimated = estimator
+estimated = best_smoothed
 
 moments, indices = NetworkHistogram.get_moment_representation(estimated)
 
 
 
-
 permutation = sortperm(estimated.node_labels)
-
-white_lines = []
-permuted_node_labels = estimated.node_labels[permutation]
-for (index, label) in enumerate(permuted_node_labels[2:end])
-    if label != permuted_node_labels[index]
-        push!(white_lines, index)
-    end
-end
 
 #get parameters matrices permuted
 P = zeros(n,n, size(moments,3))
@@ -101,11 +115,11 @@ function plot_pairs_adjacency_probs(A,P)
     p_networks = []
     p_probs = []
     for i in 1:size(A, 3)
-        plot_graph = heatmap(
+        plot_graph = Plots.heatmap(
             A[:, :, i], clims = (0, 1), legend = :none,
             xformatter = _ -> "",
             yformatter = _ -> "")
-        plot_probs = heatmap(
+        plot_probs = Plots.heatmap(
             P[:, :, i], clims = (0, 1), legend = :none,
             xformatter = _ -> "",
             yformatter = _ -> "")
@@ -118,24 +132,25 @@ function plot_pairs_adjacency_probs(A,P)
 end
 
 
-#plot_networks, plot_probs = plot_pairs_adjacency_probs(A,P)
-#plot_networks_permuted, plot_probs_permuted = plot_pairs_adjacency_probs(A_permuted,P_permuted)
+plot_networks, plot_probs = plot_pairs_adjacency_probs(A,P)
+plot_networks_permuted, plot_probs_permuted = plot_pairs_adjacency_probs(A_permuted,P_permuted)
 
 
-#for i in 1:size(A, 3)
-#    display(plot(plot_networks[i], plot_probs[i], plot_networks_permuted[i],
-#                plot_probs_permuted[i], layout = (2, 2),
-#            size = (800, 800), bottom_margin = 4Plots.mm, suptitle = list_names[i]))
-#end
+for i in 1:size(A, 3)
+    display(Plots.plot(plot_networks_permuted[i],
+                plot_probs_permuted[i], layout = (1, 2),
+            size = (800, 400), bottom_margin = 4Plots.mm, suptitle = list_names[i]))
+end
 
+##
 
 n_groups = length(unique(estimated.node_labels))
 for group in sort(unique(estimated.node_labels))
     println("Group $group")
-    println(node_names[estimated.node_labels .== group])
+    println(node_names[findall(estimated.node_labels .== group)])
 end
 
-using DataFrames,Countries
+
 df_all_countries = DataFrame(all_countries())
 labels_not_found = Dict([
     "China, Hong Kong SAR" => "Hong Kong",
@@ -152,8 +167,8 @@ labels_not_found = Dict([
     "Bolivia (Plurinational State of)" => "Bolivia, Plurinational State of",
     "United Republic of Tanzania" => "Tanzania, United Republic of",
     "China, Macao SAR" => "Macao",
-    "Turkey" => "Türkiye",
-    ]
+    "Turkey" => "Türkiye"
+]
 )
 
 for name in node_names
@@ -164,25 +179,74 @@ for name in node_names
 end
 
 nodes_name_common = replace.(node_names, labels_not_found...)
-@assert length(nodes_name_common[(!in).(nodes_name_common, Ref(df_all_countries.name))]) ==
-        0
+@assert length(nodes_name_common[(!in).(nodes_name_common, Ref(df_all_countries.name))]) ==0
+
 
 
 country_codes = [df_all_countries[df_all_countries.name .== name, :].alpha3[1] for name in nodes_name_common]
+
+
+using CSV
+df_more_info = DataFrame(CSV.File(joinpath(
+    @__DIR__, "../data/FAO_Multiplex_Trade/country-codes.csv")))
+continents = Vector{String}(undef, length(country_codes))
+for (i, code) in enumerate(country_codes)
+    if code ∈ df_more_info.var"ISO3166-1-Alpha-3"
+        index = findfirst(x -> x .== code, skipmissing(df_more_info.var"ISO3166-1-Alpha-3"))
+        continents[i] = df_more_info[index, :Continent]
+    else
+        println("Code $code not found")
+        continents[i] = "Unknown"
+    end
+end
+
+continents
 country_cluster = estimated.node_labels
 
 ##
+#plot the trade network by sorting wrt to continent
+node_ordering_continent = sortperm(continents)
+plot_networks_continent, plot_probs_continents = plot_pairs_adjacency_probs(
+    A[node_ordering_continent,node_ordering_continent,:], P[node_ordering_continent,node_ordering_continent,:])
+
+#now sort by degree inside each continent
+
+white_lines = []
+node_labels_continent = estimated.node_labels[node_ordering_continent]
+sorted_continents = continents[node_ordering_continent]
+previous = sorted_continents[1]
+for (index, label) in enumerate(sorted_continents[2:end])
+    if label != previous
+        push!(white_lines, index)
+    end
+    previous = label
+end
+
+for plot_sequence in [plot_networks_continent, plot_probs_continents]
+    for plot_inter in plot_sequence
+        for line in white_lines
+            Plots.plot!(plot_inter, [line, line], [0, n], color = :white, linewidth = 1)
+            Plots.plot!(plot_inter, [0, n], [line, line], color = :white, linewidth = 1)
+            Plots.plot!(plot_inter, xlims = (0.5, n + 0.5), ylims = (0.5, n + 0.5))
+        end
+    end
+end
+
+for i in 1:size(A, 3)
+    display(Plots.plot(plot_networks_continent[i],
+        plot_probs_continents[i], layout = (1, 2),
+        size = (800, 400), bottom_margin = 4Plots.mm, suptitle = list_names[i]))
+end
+
+
+##
+
 # Plot countries based on clustering
-using Makie, CairoMakie, GeoMakie
-import Downloads
-using GeoMakie.GeoJSON
-using GeometryBasics
-using GeoMakie.GeoInterface
+
 worldCountries = GeoJSON.read(read(
     Downloads.download("https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson"),
     String))
 
-##
 
 lons = -180:180
 lats = -90:90
@@ -191,7 +255,7 @@ field = [exp(cosd(l)) + 3(y / 90) for l in lons, y in lats]
 
 fig = Figure(size = (1200, 800), fontsize = 22)
 #colorscheme = :Paired_12
-colorscheme = :tab20c
+colorscheme = :tab20
 
 ax = GeoAxis(
     fig[1, 1];
@@ -199,7 +263,8 @@ ax = GeoAxis(
     title = "Trade network clustering, 2010",
     tellheight = false,
     yticklabelsvisible = false,
-    xticklabelsvisible = false)
+    xticklabelsvisible = false,
+    xgridwidth = 0.1, ygridwidth = 0.1)
 
 # add blue image for background (ocean)
 hm1 = Makie.surface!(ax, lons, lats, (x,y)->0; shading = NoShading,
@@ -217,17 +282,16 @@ countries_to_plot = filter(x -> x.ISO_A3 ∈ country_codes, worldCountries.featu
 colors =  ones(Int,length(countries_to_plot))
 for i in eachindex(countries_to_plot)
     country_code = countries_to_plot[i].ISO_A3
-    colors[i] = country_cluster[country_codes .== country_code][1]
+    colors[i] = country_cluster[findfirst(country_codes .== country_code)][1]
 end
 
 hm2 = poly!(
     ax, GeoJSON.FeatureCollection(features=countries_to_plot);
     color = colors,
-    colormap = colorscheme,
+    colormap = Reverse(colorscheme),
     strokecolor = :black,
     strokewidth = 0.25
 )
-
 cb = Colorbar(fig[1, 2]; colorrange = (1, n_groups),
     colormap = cgrad(colorscheme, n_groups, categorical = true),
     label = "Group", height = Relative(0.65))
