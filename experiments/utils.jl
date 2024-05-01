@@ -78,3 +78,23 @@ function orderered_latents(n,π)
     end
     return latents
 end
+
+
+function count_matches(x, y)
+    sort!(x)
+    sort!(y)
+    i = j = 1
+    matches = 0
+    while i <= length(x) && j <= length(y)
+        if x[i] == y[j]
+            i += 1
+            j += 1
+            matches += 1
+        elseif x[i] < y[j]
+            i += 1
+        else
+            j += 1
+        end
+    end
+    matches
+end
