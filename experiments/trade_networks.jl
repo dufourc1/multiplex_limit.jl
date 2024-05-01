@@ -8,12 +8,14 @@ using GeoMakie.GeoInterface
 
 include("utils.jl")
 
+
+## Data loading
+
 data_dir = joinpath(@__DIR__, "../data/FAO_Multiplex_Trade/Dataset/")
 path_to_data = joinpath(data_dir, "fao_trade_multiplex.edges")
 path_to_layer_names = joinpath(data_dir, "fao_trade_layers.txt")
 path_to_node_names = joinpath(data_dir, "fao_trade_nodes.txt")
 
-# Load the data
 n_all = 214
 max_edges_per_layer = n_all * (n_all - 1) ÷ 2
 num_layers = 364
@@ -59,6 +61,8 @@ for line in readlines(path_to_data)
 end
 
 
+## Preprocessing
+
 # preprocessing as in "Latent space models for multiplex networks"
 layers_dense = findall(vec(sum(A_all, dims = (1, 2))) ./ (max_edges_per_layer * 2) .≥ 0.1)
 A_layers = A_all[:,:,layers_dense]
@@ -79,14 +83,13 @@ list_names = list_names_all[layers_dense]
 node_names = node_names_all[nodes_dense]
 n = size(A, 1)
 
-
-
+## Model fitting
 
 # fit the model
 estimator, history = graphhist(A;
     starting_assignment_rule = EigenStart(),
-    maxitr = Int(1e8),
-    stop_rule = PreviousBestValue(10000))
+    maxitr = Int(1e6),
+    stop_rule = PreviousBestValue(1000))
 #display(plot(history.history))
 
 
@@ -97,6 +100,7 @@ estimated = best_smoothed
 
 moments, indices = NetworkHistogram.get_moment_representation(estimated)
 
+## Postprocessing
 
 
 permutation = sortperm(estimated.node_labels)
@@ -110,39 +114,7 @@ A_permuted = A[permutation, permutation, :]
 P_permuted = P[permutation, permutation, :]
 node_names_permuted = node_names[permutation]
 
-function plot_pairs_adjacency_probs(A,P)
-    p_networks = []
-    p_probs = []
-    for i in 1:size(A, 3)
-        f = Figure()
-        ax = Axis(f[1, 1])
-        Makie.heatmap!(ax, A[:, :, i], colorrange = (0, 1))
-        hidedecorations!(ax)
-        push!(p_networks, f)
 
-        f2 = Figure()
-        ax2, hm = Makie.heatmap(f2[1, 1], P[:, :, i], colorrange = (0, 1))
-        hidedecorations!(ax2)
-        Colorbar(f2[:, end + 1], hm)
-        push!(p_probs, f2)
-    end
-    return p_networks, p_probs
-end
-
-
-plot_networks, plot_probs = plot_pairs_adjacency_probs(A,P)
-plot_networks_permuted, plot_probs_permuted = plot_pairs_adjacency_probs(A_permuted,P_permuted)
-
-
-for i in 1:size(A, 3)
-    fig = Figure()
-
-    display(plot(plot_networks_permuted[i],
-                plot_probs_permuted[i], layout = (1, 2),
-            size = (800, 400), bottom_margin = 4Plots.mm, suptitle = list_names[i]))
-end
-
-##
 
 n_groups = length(unique(estimated.node_labels))
 for group in sort(unique(estimated.node_labels))
@@ -200,47 +172,54 @@ for (i, code) in enumerate(country_codes)
     end
 end
 
+
+## reorder
+
 continents
 country_cluster = estimated.node_labels
 
-##
+
+degrees = vec(sum(A, dims = (2,3)))
+tuple_continent_degrees = [(continents[i], degrees[i][1]) for i in 1:n]
+
+
+dict_order_continent = Dict([("AF" => 3), ("AS" => 2), ("EU" => 1), ("NA" => 4), ("OC" => 6), ("SA" => 5)])
+
+node_ordering_continent = sortperm(tuple_continent_degrees,
+    lt = (x, y) -> (dict_order_continent[x[1]] < dict_order_continent[y[1]] ||
+                    (x[1] == y[1] && x[2] > y[2])))
+
 #plot the trade network by sorting wrt to continent
-node_ordering_continent = sortperm(continents)
+#node_ordering_continent = sortperm(continents)
 A_continent =  A[node_ordering_continent,node_ordering_continent,:]
 P_continent = P[node_ordering_continent,node_ordering_continent,:]
 node_labels_continent = estimated.node_labels[node_ordering_continent]
-
-
-plot_networks_continent, plot_probs_continents = plot_pairs_adjacency_probs(
-   A_continent, P_continent)
-
-#now sort by degree inside each continent
+node_names_continent = node_names[node_ordering_continent]
 
 white_lines_continent = []
 sorted_continents = continents[node_ordering_continent]
+continents_ordered = Array{String}(undef, length(unique(continents)))
 previous = sorted_continents[1]
 for (index, label) in enumerate(sorted_continents[2:end])
     if label != previous
-        push!(white_lines_continent, index)
+        push!(white_lines_continent, index+0.5)
     end
     previous = label
 end
 
-for plot_sequence in [plot_networks_continent, plot_probs_continents]
-    for plot_inter in plot_sequence
-        for line in white_lines
-            Plots.plot!(plot_inter, [line, line], [0, n], color = :white, linewidth = 1)
-            Plots.plot!(plot_inter, [0, n], [line, line], color = :white, linewidth = 1)
-            Plots.plot!(plot_inter, xlims = (0.5, n + 0.5), ylims = (0.5, n + 0.5))
-        end
-    end
-end
 
-for i in 1:size(A, 3)
-    display(Plots.plot(plot_networks_continent[i],
-        plot_probs_continents[i], layout = (1, 2),
-        size = (800, 400), bottom_margin = 4Plots.mm, suptitle = list_names[i]))
-end
+
+##
+
+include("visualisation.jl")
+fig = visualise_pairs([P, P_permuted, P_continent],
+    [A, A_permuted, A_continent],
+    ["Original", "Permutation", "Continent"],
+    list_names,
+    [node_names, node_names_permuted, node_names_continent],
+    [[0], [0], white_lines_continent],
+    sort(unique(continents), by = x -> dict_order_continent[x]))
+fig
 
 
 ##
