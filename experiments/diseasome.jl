@@ -57,27 +57,29 @@ A_all[:, :, 2] = adj_symptoms
 
 
 ## Remove isolated diseases
-degrees = dropdims(sum(Int.(A_all .> 0), dims = (2)), dims = 2)
+A_all_binary = Int.(A_all .> 0)
+degrees = dropdims(sum(A_all_binary, dims = (2)), dims = 2)
 
-threshold = 1
-#non_isolated_layer = findall(x -> x[1] + x[2] > threshold, eachrow(degrees))
-non_isolated_layer = findall(x -> x[1] > threshold && x[2] > threshold, eachrow(degrees))
+threshold = 2
+#result with threshold = 2 and non_isolated_layer = findall(x -> x[1] ≥ threshold && x[2] ≥ threshold, eachrow(degrees))
+non_isolated_layer = findall(x -> x[1] ≥ threshold && x[2] ≥ threshold, eachrow(degrees))
 
-A_inter = A_all[non_isolated_layer, non_isolated_layer, :]
+A_inter = A_all_binary[non_isolated_layer, non_isolated_layer, :]
 A_weight_inter = A_all[non_isolated_layer, non_isolated_layer, :]
-non_isolated_diseases = findall(x -> x > threshold,
+names = diseases_names[non_isolated_layer]
+non_isolated_diseases = findall(x -> x ≥ threshold,
     vec(sum(A_inter, dims = (2, 3))))
 
 
 A_weight = A_weight_inter[non_isolated_diseases, non_isolated_diseases, :]
-names = diseases_names[non_isolated_diseases]
+names = names[non_isolated_diseases]
 n = length(names)
 
 
 #slow but can't be bothered to optimize
 categories = Array{String}(undef, n)
 for (i,name) in enumerate(names)
-    category_raw = filter(x -> x.disorder == name, gwas_dataset).disorder_cat
+    category_raw = filter(x -> x.disorder == name, omim_dataset).disorder_cat
     if isempty(category_raw) || ismissing(category_raw[1])
         categories[i] = "z-Unknown"
     else
@@ -113,7 +115,7 @@ display(fig)
 
 ## Fit the model
 estimator, history = graphhist(A;
-    starting_assignment_rule = OrderedStart(),
+    starting_assignment_rule = EigenStart(),
     maxitr = Int(1e7),
     stop_rule = PreviousBestValue(10000))
 
@@ -163,31 +165,33 @@ P[:, :, 2] = get_p_matrix([m[2] for m in marginals], estimated.node_labels)
 P[:, :, 3] = get_p_matrix([m[3] for m in corrs], estimated.node_labels)
 
 
-P[:,:,1:2] .= P[:,:,1:2] .^0.5
-P_block[:,:,1:2] .= P_block[:,:,1:2] .^0.5
+#P[:,:,1:2] .= P[:,:,1:2] .^0.5
+#P_block[:,:,1:2] .= P_block[:,:,1:2] .^0.5
 
-function display_approx_and_data(P, A, sorting; label = "p")
-    fig = Figure(size = (800, 400))
+function display_approx_and_data(P, A, sorting; label = "")
+    fig = Figure(size = (800, 500))
     colormap = :lipari
-    ax = Axis(fig[1, 1], aspect = 1, title = "Genotype")
-    ax2 = Axis(fig[1, 2], aspect = 1, title = "Symptoms")
+    ax = Axis(fig[1, 1], aspect = 1, title = "Genotype layer", ylabel = "Histogram")
+    ax2 = Axis(fig[1, 2], aspect = 1, title = "Phenotype layer")
     ax3 = Axis(fig[1, 3], aspect = 1, title = "Correlation")
-    ax4 = Axis(fig[2, 1], aspect = 1)
+    ylabel = label == "" ? "Adjacency matrix" : "Adjacency matrix (sorted by $label)"
+    ax4 = Axis(fig[2, 1], aspect = 1, ylabel = ylabel)
     ax5 = Axis(fig[2, 2], aspect = 1)
     ax6 = Axis(fig[2, 3], aspect = 1)
     heatmap!(ax, P[sorting,sorting, 1], colormap = colormap, colorrange = (0, 1))
     heatmap!(ax2, P[sorting,sorting, 2], colormap = colormap, colorrange = (0, 1))
-    heatmap!(ax3, P[sorting,sorting, 3], colormap = :balance, colorrange = (-1, 1))
+    heatmap!(ax3, P[sorting,sorting, 3], colormap = colormap, colorrange = (0, 1))
     heatmap!(ax4, A[sorting, sorting, 1], colormap = :binary)
     heatmap!(ax5, A[sorting, sorting, 2], colormap = :binary)
     heatmap!(
         ax6, A[sorting, sorting, 1] .* A[sorting, sorting, 2],
         colormap = :binary)
-    Colorbar(fig[1:2, end + 1], colorrange = (0, 1), label = label,
-        colormap = colormap, vertical = true)
-    Colorbar(fig[1:2, end + 1], colorrange = (-1, 1), label = "Correlation",
-        colormap = :balance, vertical = true)
-    hidedecorations!.([ax, ax2, ax3, ax4, ax5, ax6])
+    Colorbar(fig[1:2, end + 1], colorrange = (0, 1),
+        colormap = colormap, vertical = true, height = Relative(0.8))
+    #Colorbar(fig[1:2, end + 1], colorrange = (-1, 1), label = "Correlation",
+    #    colormap = :balance, vertical = true)
+    hidedecorations!.([ax2, ax3, ax5, ax6])
+    hidedecorations!.([ax, ax4], label=false)
     return fig
 end
 
@@ -197,39 +201,68 @@ sorted_labels = sortperm(estimated.node_labels, rev = false)
 
 
 
-fig_fit = display_approx_and_data(P, A, sorted_labels, label = "ordered by fit")
+fig_fit = display_approx_and_data(P, A, sorted_labels, label = "")
 save(joinpath(@__DIR__, "diseasome_fit.pdf"), fig_fit)
+display(fig_fit)
 
 ##
-
 A_plot_big = deepcopy(A)
-A_plot_big[:,:,1] .*= 1
-A_plot_big[:,:,2] .*= 2
+A_plot_big[:, :, 1] .*= 1
+A_plot_big[:, :, 2] .*= 2
 A_plot = dropdims(sum(A_plot_big, dims = 3), dims = 3)
 
-fig, ax, pl = heatmap(
-    A_plot[sorted_labels, sorted_labels], colormap = Makie.Categorical(Reverse(:okabe_ito)); axis = (aspect=1,))
-cb = Colorbar(fig[1,2 ],pl;
-    label = "Type of connection", vertical = true)
-ax.title = "Flattened multiplex adjacency matrix"
-colsize!(fig.layout, 1, Aspect(1, 1.0))
-hidedecorations!(ax)
-save(joinpath(@__DIR__, "diseasome_adjacency.pdf"), fig)
+dict_name = Dict([0 => "None", 1 => "Genotype", 2 => "Phenotype", 3 => "Both"])
+A_plot_string = [dict_name[a] for a in A_plot]
+
+fig = Figure(size = (800, 400))
+#titlelayout = GridLayout(fig[0, 2], halign = :center, tellwidth = false)
+#Label(titlelayout[1,:], "Flattened multiplex adjacency matrix", halign = :center,
+#    fontsize = 20)
+#rowgap!(titlelayout, 0)
+
+ax = Axis(fig[1, 1], aspect = 1, title = "Sorted by histogram clusters", titlesize = 14)
+ax2 = Axis(fig[1, 2], aspect = 1, title = "Sorted by disease category", titlesize = 14)
+ax3 = Axis(fig[1, 3], aspect = 1, title = "Sorted by degree", titlesize = 14)
+
+heatmap!(ax, A_plot[sorted_labels, sorted_labels],
+    colormap = Makie.Categorical(Reverse(:okabe_ito)))
+heatmap!(ax2, A_plot[sorting_by_category, sorting_by_category],
+    colormap = Makie.Categorical(Reverse(:okabe_ito)))
+pl = heatmap!(ax3, A_plot[sorted_degree, sorted_degree],
+    colormap = Makie.Categorical(Reverse(:okabe_ito)))
+hidedecorations!.([ax, ax2, ax3], label = false)
+#cb = Colorbar(fig[2, :],pl;
+#    label = "Type of connection", vertical = false, width = Relative(0.5), flipaxis=false)
+cb = Colorbar(fig[2, :];
+    colormap = Reverse(cgrad(:okabe_ito, 4, categorical = true)),
+    limits = (0,4),
+    label = "Type of connection",
+    labelsize = 14,
+    ticklabelsize = 12,
+    vertical = false, width = Relative(0.5), flipaxis=true, ticks = ([0.5, 1.5, 2.5, 3.5], ["None", "Genotype", "Phenotype", "Both"]))
 display(fig)
+save(joinpath(@__DIR__, "diseasome_adjacency.pdf"), fig)
 
 ##
 
 
-display(display_approx_and_data(P, A, sorted_labels, label = "ordered by fit"))
-display(display_approx_and_data(P, A, 1:n; label= "ordered by index"))
-display(display_approx_and_data(P, A, sorting_by_category, label ="ordered by category"))
-display(display_approx_and_data(P, A, sorted_degree, label = "ordered by degree"))
+display(display_approx_and_data(P, A, sorted_labels, label = "fit"))
+display(display_approx_and_data(P, A, 1:n; label= "index"))
+display(display_approx_and_data(P, A, sorting_by_category, label ="category"))
+display(display_approx_and_data(P, A, sorted_degree, label = "degree"))
+display(display_approx_and_data(P_block, A, 1:n; label = "index, block model"))
+display(display_approx_and_data(P_block, A, sorting_by_category, label = "category, block model"))
+display(display_approx_and_data(P_block, A, sorted_degree, label = "degree, block model"))
+display(display_approx_and_data(P_block, A, sorted_labels, label = "fit, block model"))
 
 ## find interesting correlations
-indices_group = (findall(x -> x[3] > 0.3, corrs))
+
+indices_group = (findall(x -> x[3] > 0.4, corrs))
 indices_node_group = [x[1] for x in indices_group]
 indices_group = filter(x -> Tuple(x)[1] <= Tuple(x)[2], indices_group)
 
 fitted_dists = unique(mvberns[indices_group])
 
 indices_node_group
+nodes = [findall(estimated.node_labels .== i) for i in indices_node_group]
+names_corr = [names[i] for i in nodes]
