@@ -3,7 +3,12 @@ using DataFrames
 using ProgressMeter
 using Makie, CairoMakie
 using JLD
+using MVBernoulli
+using LinearAlgebra
 
+Makie.inline!(true)
+using Random
+Random.seed!(123354472456192348634612304864326748)
 include("utils.jl")
 ## Load the data
 
@@ -42,17 +47,29 @@ end
 
 diseases_names, adj_genotype, adj_symptoms = get_genotype_and_symptoms_cooccurrence_matrix(omim_dataset, joinpath(path_to_data_folder,"adj_omim.jld"))
 
+
+
+
 A_all = zeros(length(diseases_names), length(diseases_names), 2)
-A_all[:, :, 1] = adj_genotype
+A_all[:, :, 1] =  adj_genotype
 A_all[:, :, 2] = adj_symptoms
 
 
-## Remove isolated diseases
-degrees = vec(sum(A_all, dims = (2, 3)))
-threshold = 1
-non_isolated_diseases = findall(x -> x ≥ threshold , degrees)
 
-A_weight = A_all[non_isolated_diseases, non_isolated_diseases, :]
+## Remove isolated diseases
+degrees = dropdims(sum(Int.(A_all .> 0), dims = (2)), dims = 2)
+
+threshold = 1
+#non_isolated_layer = findall(x -> x[1] + x[2] > threshold, eachrow(degrees))
+non_isolated_layer = findall(x -> x[1] > threshold && x[2] > threshold, eachrow(degrees))
+
+A_inter = A_all[non_isolated_layer, non_isolated_layer, :]
+A_weight_inter = A_all[non_isolated_layer, non_isolated_layer, :]
+non_isolated_diseases = findall(x -> x > threshold,
+    vec(sum(A_inter, dims = (2, 3))))
+
+
+A_weight = A_weight_inter[non_isolated_diseases, non_isolated_diseases, :]
 names = diseases_names[non_isolated_diseases]
 n = length(names)
 
@@ -68,15 +85,26 @@ for (i,name) in enumerate(names)
     end
 end
 
-sorting_by_category = sortperm(categories)
-A_weight = A_weight[sorting_by_category, sorting_by_category, :]
-names = names[sorting_by_category]
+A = Int.(A_weight .> 0)
+
+
+
+categories_degree = [mean(A[findall(categories .== cat), :, :]) for cat in unique(categories)]
+categories_order = unique(categories)[sortperm(categories_degree, rev = true)]
+
+degrees = vec(sum(A, dims = (2,3)))
+tuple_cat_degree = [(findfirst(s -> s == categories[i], categories_order), degrees[i])
+                    for i in 1:size(A, 1)]
+
+sorting_by_category = sortperm(tuple_cat_degree,
+    lt = (x, y) -> x[1] < y[1] ||
+        (x[1] == y[1] && x[2] > y[2]))
 
 ## Convert to binary
-A = Int.(A_weight .> 0)
+
 fig = Figure()
-ax = Axis(fig[1, 1], aspect = 1, title = "Genotype")
-ax2 = Axis(fig[1, 2], aspect = 1, title = "Symptoms")
+ax = Axis(fig[1, 1], aspect = 1, title = "Genotype, threshold = $threshold")
+ax2 = Axis(fig[1, 2], aspect = 1, title = "Symptoms, threshold = $threshold")
 heatmap!(ax, A[:, :, 1], colormap = :binary)
 heatmap!(ax2, A[:, :, 2], colormap = :binary)
 display(fig)
@@ -85,43 +113,71 @@ display(fig)
 
 ## Fit the model
 estimator, history = graphhist(A;
-    starting_assignment_rule = EigenStart(),
+    starting_assignment_rule = OrderedStart(),
     maxitr = Int(1e7),
     stop_rule = PreviousBestValue(10000))
 
 fig = Figure()
-ax = Axis(fig[1, 1], xlabel = "Iterations", ylabel = "Log-likelihood")
+best_ll = round(NetworkHistogram.get_bestitr(history)[2], sigdigits=2)
+ax = Axis(fig[1, 1], xlabel = "Iterations", ylabel = "Log-likelihood", title = "Log-likelihood: $(best_ll)")
 lines!(ax, get(history.history, :best_likelihood)...)
 display(fig)
 
 
 ##
+n_group_nodes = length(unique(estimator.node_labels))
+max_shapes = n_group_nodes * (n_group_nodes + 1) ÷ 2
+estimator_ = NetworkHistogram.GraphShapeHist(max_shapes, estimator)
+for i in 1:n_group_nodes
+    for j in i:n_group_nodes
+        @assert all(estimator.θ[i,j,:] .== estimator_.θ[i,j])
+    end
+end
+
+
 best_smoothed, bic_values = NetworkHistogram.get_best_smoothed_estimator(estimator, A)
+display(lines(bic_values, legend = false, xlabel = "Number of shapes", ylabel = "BIC", title = "BIC values"))
+##
+
 
 estimated = best_smoothed
 moments, indices = NetworkHistogram.get_moment_representation(estimated)
 
+mvberns = MVBernoulli.from_tabulation.(estimated.θ)
+marginals = MVBernoulli.marginals.(mvberns)
+corrs = MVBernoulli.correlation_matrix.(mvberns)
 
-##
+mvberns_block = MVBernoulli.from_tabulation.(estimator_.θ)
+marginals_block = MVBernoulli.marginals.(mvberns_block)
+corrs_block = MVBernoulli.correlation_matrix.(mvberns_block)
+
+@assert length(estimated.node_labels) == n
+P_block = zeros(n, n, 3)
+P_block[:, :, 1] = get_p_matrix([m[1] for m in marginals_block], estimator_.node_labels)
+P_block[:, :, 2] = get_p_matrix([m[2] for m in marginals_block], estimator_.node_labels)
+P_block[:, :, 3] = get_p_matrix([m[3] for m in corrs_block], estimator_.node_labels)
 
 P = zeros(n, n, 3)
-for i in 1:3
-    P[:, :, i] = get_p_matrix(moments[:, :, i], estimated.node_labels)
-end
+P[:, :, 1] = get_p_matrix([m[1] for m in marginals], estimated.node_labels)
+P[:, :, 2] = get_p_matrix([m[2] for m in marginals], estimated.node_labels)
+P[:, :, 3] = get_p_matrix([m[3] for m in corrs], estimated.node_labels)
 
+
+P[:,:,1:2] .= P[:,:,1:2] .^0.5
+P_block[:,:,1:2] .= P_block[:,:,1:2] .^0.5
 
 function display_approx_and_data(P, A, sorting; label = "p")
     fig = Figure(size = (800, 400))
     colormap = :lipari
     ax = Axis(fig[1, 1], aspect = 1, title = "Genotype")
     ax2 = Axis(fig[1, 2], aspect = 1, title = "Symptoms")
-    ax3 = Axis(fig[1, 3], aspect = 1, title = "Interactions")
+    ax3 = Axis(fig[1, 3], aspect = 1, title = "Correlation")
     ax4 = Axis(fig[2, 1], aspect = 1)
     ax5 = Axis(fig[2, 2], aspect = 1)
     ax6 = Axis(fig[2, 3], aspect = 1)
     heatmap!(ax, P[sorting,sorting, 1], colormap = colormap, colorrange = (0, 1))
     heatmap!(ax2, P[sorting,sorting, 2], colormap = colormap, colorrange = (0, 1))
-    heatmap!(ax3, P[sorting,sorting, 3], colormap = colormap, colorrange = (0, 1))
+    heatmap!(ax3, P[sorting,sorting, 3], colormap = :balance, colorrange = (-1, 1))
     heatmap!(ax4, A[sorting, sorting, 1], colormap = :binary)
     heatmap!(ax5, A[sorting, sorting, 2], colormap = :binary)
     heatmap!(
@@ -129,56 +185,51 @@ function display_approx_and_data(P, A, sorting; label = "p")
         colormap = :binary)
     Colorbar(fig[1:2, end + 1], colorrange = (0, 1), label = label,
         colormap = colormap, vertical = true)
+    Colorbar(fig[1:2, end + 1], colorrange = (-1, 1), label = "Correlation",
+        colormap = :balance, vertical = true)
     hidedecorations!.([ax, ax2, ax3, ax4, ax5, ax6])
     return fig
 end
+
 
 sorted_degree = sortperm(vec(sum(A, dims = (2, 3))), rev = true)
 sorted_labels = sortperm(estimated.node_labels, rev = false)
 
 
-display(display_approx_and_data(moments, moments, 1:size(moments,1); label= "moments"))
-display(display_approx_and_data(P, A, 1:n; label= "ordered by index"))
-display(display_approx_and_data(P, A, sorting_by_category, label ="ordered by category"))
-display(display_approx_and_data(P, A, sorted_labels, label = "ordered by fit"))
-display(display_approx_and_data(P, A, sorted_degree, label = "ordered by degree"))
 
-fig = Figure(size=(800,400))
-colormap = :lipari
-ax = Axis(fig[1, 1], aspect = 1, title = "Genotype")
-ax2 = Axis(fig[1, 2], aspect = 1, title = "Symptoms")
-ax3 = Axis(fig[1, 3], aspect = 1, title = "Interactions")
-heatmap!(ax, P[:, :, 1], colormap = colormap, colorrange = (0, 1))
-heatmap!(ax2, P[:, :, 2], colormap = colormap, colorrange = (0, 1))
-heatmap!(ax3, P[:, :, 3], colormap = colormap, colorrange = (0, 1))
-Colorbar(fig[end + 1,:], colorheatmap!(ax3, P[:, :, 3], colormap = colormap, colorrange = (0, 1))
-range = (0, 1), label = "ordered by category", colormap = colormap, vertical = false)
-hidedecorations!.([ax, ax2, ax3])
-display(fig)
-
-P_sorted_degree = P[sorted_degree, sorted_degree, :]
-
-
-fig = Figure()
-ax = Axis(fig[1, 1], aspect = 1, title = "Genotype")
-ax2 = Axis(fig[1, 2], aspect = 1, title = "Symptoms")
-heatmap!(ax, A[sorted_degree, sorted_degree, 1], colormap = :binary)
-heatmap!(ax2, A[sorted_degree, sorted_degree, 2], colormap = :binary)
-display(fig)
-
-fig = Figure(size = (800, 400))
-colormap = :lipari
-ax = Axis(fig[1, 1], aspect = 1, title = "Genotype")
-ax2 = Axis(fig[1, 2], aspect = 1, title = "Symptoms")
-ax3 = Axis(fig[1, 3], aspect = 1, title = "Interactions")
-heatmap!(ax, P_sorted_degree[:, :, 1], colormap = colormap, colorrange = (0, 1))
-heatmap!(ax2, P_sorted_degree[:, :, 2], colormap = colormap, colorrange = (0, 1))
-heatmap!(ax3, P_sorted_degree[:, :, 3], colormap = colormap, colorrange = (0, 1))
-Colorbar(fig[end + 1, :], colorrange = (0, 1), label = "ordered by degree",
-    colormap = colormap, vertical = false)
-hidedecorations!.([ax, ax2, ax3])
-display(fig)
-
-P_sorted_labels = P[sorted_labels, sorted_labels, :]
+fig_fit = display_approx_and_data(P, A, sorted_labels, label = "ordered by fit")
+save(joinpath(@__DIR__, "diseasome_fit.pdf"), fig_fit)
 
 ##
+
+A_plot_big = deepcopy(A)
+A_plot_big[:,:,1] .*= 1
+A_plot_big[:,:,2] .*= 2
+A_plot = dropdims(sum(A_plot_big, dims = 3), dims = 3)
+
+fig, ax, pl = heatmap(
+    A_plot[sorted_labels, sorted_labels], colormap = Makie.Categorical(Reverse(:okabe_ito)); axis = (aspect=1,))
+cb = Colorbar(fig[1,2 ],pl;
+    label = "Type of connection", vertical = true)
+ax.title = "Flattened multiplex adjacency matrix"
+colsize!(fig.layout, 1, Aspect(1, 1.0))
+hidedecorations!(ax)
+save(joinpath(@__DIR__, "diseasome_adjacency.pdf"), fig)
+display(fig)
+
+##
+
+
+display(display_approx_and_data(P, A, sorted_labels, label = "ordered by fit"))
+display(display_approx_and_data(P, A, 1:n; label= "ordered by index"))
+display(display_approx_and_data(P, A, sorting_by_category, label ="ordered by category"))
+display(display_approx_and_data(P, A, sorted_degree, label = "ordered by degree"))
+
+## find interesting correlations
+indices_group = (findall(x -> x[3] > 0.3, corrs))
+indices_node_group = [x[1] for x in indices_group]
+indices_group = filter(x -> Tuple(x)[1] <= Tuple(x)[2], indices_group)
+
+fitted_dists = unique(mvberns[indices_group])
+
+indices_node_group

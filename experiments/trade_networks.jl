@@ -1,10 +1,15 @@
 using NetworkHistogram, Statistics
 using DataFrames, Countries
-using Makie, CairoMakie, GeoMakie
+#using Makie, CairoMakie, GeoMakie
+using CairoMakie, GeoMakie
+using GeoMakie
 import Downloads
 using GeoMakie.GeoJSON
 using GeometryBasics
 using GeoMakie.GeoInterface
+
+
+Makie.inline!(true)
 
 include("utils.jl")
 
@@ -64,11 +69,16 @@ end
 ## Preprocessing
 
 # preprocessing as in "Latent space models for multiplex networks"
-layers_dense = findall(vec(sum(A_all, dims = (1, 2))) ./ (max_edges_per_layer * 2) .≥ 0.1)
+
+nodes_dense = findall(vec(sum(A_all, dims = (2, 3))) .≥ 50)
+A_all = A_all[nodes_dense, nodes_dense, :]
+
+layers_dense = findall(vec(sum(A_all, dims = (1, 2))) ./ (max_edges_per_layer * 2) .≥ 0.12)
 A_layers = A_all[:,:,layers_dense]
 
-nodes_dense = findall(vec(sum(A_layers, dims = (2, 3))) .≥
-                      5 * size(A_layers, 3))
+threshold = 5*size(A_layers, 3)
+threshold = 50
+nodes_dense = findall(vec(sum(A_layers, dims = (2, 3))) .≥ threshold)
 nodes_dense = filter(x -> x != 93, nodes_dense) # remove the node 93: unspecified country
 
 picked_layer = nothing
@@ -82,19 +92,24 @@ A_weights = A_weights_all[nodes_dense, nodes_dense, layers_dense]
 list_names = list_names_all[layers_dense]
 node_names = node_names_all[nodes_dense]
 n = size(A, 1)
+println(size(A))
 
 ## Model fitting
 
 # fit the model
 estimator, history = graphhist(A;
     starting_assignment_rule = EigenStart(),
-    maxitr = Int(1e6),
-    stop_rule = PreviousBestValue(1000))
+    maxitr = Int(1e7),
+    stop_rule = PreviousBestValue(10000))
 #display(plot(history.history))
 
 
 best_smoothed, bic_values = NetworkHistogram.get_best_smoothed_estimator(estimator, A)
+k = length(unique(estimator.node_labels))
+max_num_shapes = k*(k+1)÷2
+estimator_ = NetworkHistogram.GraphShapeHist(20,estimator)
 
+##
 #estimated = estimator
 estimated = best_smoothed
 
@@ -139,8 +154,13 @@ labels_not_found = Dict([
     "Bolivia (Plurinational State of)" => "Bolivia, Plurinational State of",
     "United Republic of Tanzania" => "Tanzania, United Republic of",
     "China, Macao SAR" => "Macao",
-    "Turkey" => "Türkiye"
-]
+    "Turkey" => "Türkiye",
+    "Sudan (former)" => "Sudan",
+    "Netherlands Antilles" => "Netherlands",
+    "Democratic People's Republic of Korea" => "Korea, Democratic People's Republic of",
+    "Democratic Republic of the Congo" => "Congo",
+    "Swaziland" => "Eswatini",
+    "Occupied Palestinian Territory" => "Palestine, State of",]
 )
 
 for name in node_names
@@ -210,7 +230,7 @@ end
 
 
 ##
-
+Makie.inline!(false)
 include("visualisation.jl")
 fig = visualise_pairs([P, P_permuted, P_continent],
     [A, A_permuted, A_continent],
@@ -231,6 +251,10 @@ worldCountries = GeoJSON.read(read(
     String))
 
 
+using Makie, CairoMakie
+
+Makie.inline!(true)
+
 lons = -180:180
 lats = -90:90
 field = [exp(cosd(l)) + 3(y / 90) for l in lons, y in lats]
@@ -238,7 +262,7 @@ field = [exp(cosd(l)) + 3(y / 90) for l in lons, y in lats]
 
 fig = Figure(size = (1200, 800), fontsize = 22)
 #colorscheme = :Paired_12
-colorscheme = :tab20
+colorscheme = :mk_15
 
 ax = GeoAxis(
     fig[1, 1];
@@ -250,9 +274,9 @@ ax = GeoAxis(
     xgridwidth = 0.1, ygridwidth = 0.1)
 
 # add blue image for background (ocean)
-hm1 = Makie.surface!(ax, lons, lats, (x,y)->0; shading = NoShading,
-    colormap = :oslo, alpha = 0.1, colorange = (-2, 6))
-Makie.translate!(hm1, 0, 0, -10)
+#hm1 = surface!(ax, lons, lats, field; shading = NoShading,
+#    colormap = :oslo, alpha = 0.1, colorange = (-2, 6))
+#translate!(hm1, 0, 0, -10)
 
 poly!(
     ax, worldCountries;
@@ -271,7 +295,7 @@ end
 hm2 = poly!(
     ax, GeoJSON.FeatureCollection(features=countries_to_plot);
     color = colors,
-    colormap = Reverse(colorscheme),
+    colormap = colorscheme,
     strokecolor = :black,
     strokewidth = 0.25
 )
