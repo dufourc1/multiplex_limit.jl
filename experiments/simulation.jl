@@ -10,6 +10,9 @@ using LaTeXStrings
 Random.seed!(123354472456192348634612304864326748)
 include("utils.jl")
 
+
+SAVE_FIG = false
+
 softmax(x::AbstractArray{T}; dims = 1) where {T} = softmax!(similar(x, float(T)), x; dims)
 
 softmax!(x::AbstractArray; dims = 1) = softmax!(x, x; dims)
@@ -70,11 +73,26 @@ function get_tabulation(x, y)
 end
 
 
-function get_ground_truth_and_adj(n)
+
+function get_tabulation_extreme_correlation(x,y)
+    tab_corr_1 = [0.6,0.0,0.0,0.4]
+    tab_corr_neg = [0.0,0.6,0.4,0.0]
+    coeff_to_corr_1 = abs.(sin(π * (x/2)) * sin(π * (y/2)))
+    coeff_to_corr_neg = 1 - coeff_to_corr_1
+    tabulation = tab_corr_1 * coeff_to_corr_1 + tab_corr_neg * coeff_to_corr_neg
+    if all(tabulation .== 0)
+        tabulation = [25,0.25,0.25,0.25]
+    end
+    tabulation[1] *= 1.5
+    tabulation = tabulation ./ sum(tabulation)
+    return tabulation
+end
+
+function get_ground_truth_and_adj(n, get_theta = get_tabulation)
     w = zeros((n, n, 4))
     for i in 1:n
         for j in 1:n
-            w[i, j, :] = get_tabulation(i / n, j / n)
+            w[i, j, :] = get_theta(i / n, j / n)
         end
     end
 
@@ -103,7 +121,7 @@ end
 
 
 
-_, P, A = get_ground_truth_and_adj(100)
+_, P, A = get_ground_truth_and_adj(100, get_tabulation_extreme_correlation)
 display(display_approx_and_data(P, A, 1:100, label = "Ground truth, n = 100"))
 
 
@@ -211,10 +229,10 @@ P_big[:, :, 3] = get_p_matrix([m[3] for m in correlations_hat_big], estimated_bi
 
 ##
 
-sorted_labels = sortperm(estimated.node_labels, rev = false)
-sorted_labels_big = sortperm(estimated_big.node_labels, rev = false)
+# adjust the order of the estimated labels to match the ground truth wkth rev
+sorted_labels = sortperm(estimated.node_labels, rev = false)#, by = x -> (correlations_hat[x, x][3],x))
+sorted_labels_big = sortperm(estimated_big.node_labels, rev=false)#, by = x -> (correlations_hat_big[x, x][3],x))
 
-##
 
 function make_fig()
     colormap = :lipari
@@ -262,6 +280,8 @@ fig
 
 ##
 
-save("experiments/ground_truth_and_estimated_big.pdf", fig)
+if SAVE_FIG
+    save("experiments/ground_truth_and_estimated.pdf", fig)
+end
 
 ##
