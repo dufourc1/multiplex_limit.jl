@@ -17,7 +17,7 @@ path_to_data_folder = joinpath(@__DIR__, "../data/", "MultiplexDiseasome-master"
 gwas_dataset = CSV.read(joinpath(path_to_data_folder, "Datasets", "DSG_network_from_GWAS.csv"), DataFrame)
 omim_dataset = CSV.read(joinpath(path_to_data_folder, "Datasets", "DSG_network_from_OMIM.csv"), DataFrame)
 
-## GWAS dataset
+##  dataset
 
 function get_genotype_and_symptoms_cooccurrence_matrix(gwas_dataset::DataFrame, file::String = joinpath(path_to_data_folder,"adj_gwas.jld"))
     if isfile(file)
@@ -169,7 +169,7 @@ P[:, :, 3] = get_p_matrix([m[3] for m in corrs], estimated.node_labels)
 #P_block[:,:,1:2] .= P_block[:,:,1:2] .^0.5
 
 function display_approx_and_data(P, A, sorting; label = "")
-    fig = Figure(size = (800, 500))
+    fig = Figure(size = (700, 500))
     colormap = :lipari
     ax = Axis(fig[1, 1], aspect = 1, title = "Genotype layer", ylabel = "Histogram")
     ax2 = Axis(fig[1, 2], aspect = 1, title = "Phenotype layer")
@@ -186,8 +186,8 @@ function display_approx_and_data(P, A, sorting; label = "")
     heatmap!(
         ax6, A[sorting, sorting, 1] .* A[sorting, sorting, 2],
         colormap = :binary)
-    Colorbar(fig[1:2, end + 1], colorrange = (0, 1),
-        colormap = colormap, vertical = true, height = Relative(0.8))
+    Colorbar(fig[end+1, 1:3], colorrange = (0, 1),
+        colormap = colormap, vertical = false, width = Relative(0.5), flipaxis = false)
     #Colorbar(fig[1:2, end + 1], colorrange = (-1, 1), label = "Correlation",
     #    colormap = :balance, vertical = true)
     hidedecorations!.([ax2, ax3, ax5, ax6])
@@ -197,11 +197,13 @@ end
 
 
 sorted_degree = sortperm(vec(sum(A, dims = (2, 3))), rev = true)
-sorted_labels = sortperm(estimated.node_labels, rev = false)
+sorted_labels = sortperm(estimated.node_labels, rev = true, by = x ->(marginals[x,x][2],marginals[x,x][1],x))
 
 
 
 fig_fit = display_approx_and_data(P, A, sorted_labels, label = "")
+rowgap!(fig_fit.layout, Relative(0.02))
+colgap!(fig_fit.layout, Relative(0.01))
 save(joinpath(@__DIR__, "diseasome_fit.pdf"), fig_fit)
 display(fig_fit)
 
@@ -214,7 +216,7 @@ A_plot = dropdims(sum(A_plot_big, dims = 3), dims = 3)
 dict_name = Dict([0 => "None", 1 => "Genotype", 2 => "Phenotype", 3 => "Both"])
 A_plot_string = [dict_name[a] for a in A_plot]
 
-fig = Figure(size = (800, 400))
+fig = Figure(size = (700, 400))
 #titlelayout = GridLayout(fig[0, 2], halign = :center, tellwidth = false)
 #Label(titlelayout[1,:], "Flattened multiplex adjacency matrix", halign = :center,
 #    fontsize = 20)
@@ -241,6 +243,8 @@ cb = Colorbar(fig[2, :];
     ticklabelsize = 12,
     vertical = false, width = Relative(0.5), flipaxis=true, ticks = ([0.5, 1.5, 2.5, 3.5], ["None", "Genotype", "Phenotype", "Both"]))
 display(fig)
+rowgap!(fig.layout, 0.1)
+fig
 save(joinpath(@__DIR__, "diseasome_adjacency.pdf"), fig)
 
 ##
@@ -257,7 +261,9 @@ display(display_approx_and_data(P_block, A, sorted_labels, label = "fit, block m
 
 ## find interesting correlations
 
-indices_group = (findall(x -> x[3] > 0.4, corrs))
+
+max_corr = maximum([c[3] for c in corrs if !isnan(c[3])])
+indices_group = (findall(x -> x[3] == max_corr, corrs))
 indices_node_group = [x[1] for x in indices_group]
 indices_group = filter(x -> Tuple(x)[1] <= Tuple(x)[2], indices_group)
 
