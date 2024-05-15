@@ -3,6 +3,8 @@ module multiplex_limit
 using MVBernoulli
 using Distributions
 
+export getindex
+
 struct Multiplexon{T}
     θ::Matrix{MultivariateBernoulli{T}}
     π::Vector{T}
@@ -29,7 +31,7 @@ end
 
 
 
-function random_multiplexon(num_groups::Int, num_layers::Int)
+function random_multiplexon(num_groups::Int, num_layers::Int, π = ones(num_groups) ./ num_groups)
     params = [rand(2^num_layers) for _ in 1:(num_groups * (num_groups + 1) ÷ 2)]
     inter = MVBernoulli.from_tabulation(params[1] ./ sum(params[1]))
     θ = Matrix{typeof(inter)}(undef, num_groups, num_groups)
@@ -41,7 +43,6 @@ function random_multiplexon(num_groups::Int, num_layers::Int)
             index += 1
         end
     end
-    π = rand(num_groups)
     return Multiplexon(θ, π, num_layers)
 end
 
@@ -60,23 +61,6 @@ function Base.rand(s::Multiplexon, n::Int = 1, latents = rand(Categorical(s.π),
     end
     return x, latents
 end
-
-
-# function Base.rand(s::Multiplexon, n::Int = 1, latents = rand(Categorical(s.π), n),
-#         x = Array{Vector{Int}}(undef, n, n))
-#     for j in 1:n
-#         for i in 1:n
-#             if i == j
-#                 x[i, j] = zeros(Int, s.num_layers)
-#             else
-#                 x[i, j] = rand(s.θ[latents[i], latents[j]])
-#                 x[j, i] = x[i, j]
-#             end
-#         end
-#     end
-#     return x, latents
-# end
-
 
 
 function get_matrix_moment(model::multiplex_limit.Multiplexon, moment_index)

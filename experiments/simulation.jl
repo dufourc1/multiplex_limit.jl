@@ -7,6 +7,7 @@ using Random
 using MVBernoulli
 using Statistics
 using LaTeXStrings
+
 Random.seed!(123354472456192348634612304864326748)
 include("utils.jl")
 
@@ -74,6 +75,7 @@ end
 
 
 
+
 function get_tabulation_extreme_correlation(x,y)
     tab_corr_1 = [0.6,0.0,0.0,0.4]
     tab_corr_neg = [0.0,0.6,0.4,0.0]
@@ -121,69 +123,9 @@ end
 
 
 
-_, P, A = get_ground_truth_and_adj(100, get_tabulation_extreme_correlation)
+_, P, A = get_ground_truth_and_adj(100)
 display(display_approx_and_data(P, A, 1:100, label = "Ground truth, n = 100"))
 
-
-##
-function mse(dist1::MVBernoulli.MultivariateBernoulli, dist2::MVBernoulli.MultivariateBernoulli)
-    return mean((dist1.tabulation.p - dist2.tabulation.p).^2)
-end
-function mse(a::Array{MultivariateBernoulli{T}}, b::Array{MultivariateBernoulli{T}}) where {T}
-    return mean(mse.(a, b))
-end
-
-ns = [200]
-mse_n = zeros(length(ns))
-
-for (index,n) in enumerate(ns)
-    mvberns, P_true,A = get_ground_truth_and_adj(n)
-
-    fig_ground_truth = display_approx_and_data(P_true, A, 1:n, label = "Ground truth, n = $n")
-    display(fig_ground_truth)
-
-
-    estimator, history = graphhist(A;
-        starting_assignment_rule = EigenStart(),
-        maxitr = Int(1e7),
-        stop_rule = PreviousBestValue(10000))
-
-
-
-    estimated, bic_values = NetworkHistogram.get_best_smoothed_estimator(estimator, A)
-
-    mvberns_hat = MVBernoulli.from_tabulation.(estimated.θ)
-    marginals_hat = MVBernoulli.marginals.(mvberns_hat)
-    correlations_hat = MVBernoulli.correlation_matrix.(mvberns_hat)
-    p_berns_hat = similar(mvberns)
-    for i in 1:n
-        for j in 1:n
-            p_berns_hat[i, j] = mvberns_hat[estimated.node_labels[i], estimated.node_labels[j]]
-        end
-    end
-
-    mse_n[index] = mse(mvberns, p_berns_hat)
-
-    P = zeros(n, n, 3)
-    P[:, :, 1] = get_p_matrix([m[1] for m in marginals_hat], estimated.node_labels)
-    P[:, :, 2] = get_p_matrix([m[2] for m in marginals_hat], estimated.node_labels)
-    P[:, :, 3] = get_p_matrix([m[3] for m in correlations_hat], estimated.node_labels)
-
-
-    sorted_labels = sortperm(estimated.node_labels, rev = true)
-
-    fig_sorted_estimated_latent = display_approx_and_data(P, A, sorted_labels, label = "Sorted by estimated latents")
-    fig_sorted_true_latent = display_approx_and_data(P, A, 1:n, label = "Sorted by true latents")
-    display(display_approx_and_data(P,P,sorted_labels, label = "Sorted by estimated latents"))
-    display(fig_sorted_estimated_latent)
-    display(fig_sorted_true_latent)
-end
-
-
-fig = Figure()
-axis = Axis(fig[1, 1], xlabel = "Number of nodes", ylabel = "MSE")
-lines!(axis, ns, mse_n, linewidth = 2)
-display(fig)
 
 
 ##
