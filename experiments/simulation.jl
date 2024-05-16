@@ -8,11 +8,11 @@ using MVBernoulli
 using Statistics
 using LaTeXStrings
 
-Random.seed!(123354472456192348634612304864326748)
+Random.seed!(12335447245619234863461234326748)
 include("utils.jl")
 
 
-SAVE_FIG = false
+SAVE_FIG = true
 
 softmax(x::AbstractArray{T}; dims = 1) where {T} = softmax!(similar(x, float(T)), x; dims)
 
@@ -172,13 +172,13 @@ P_big[:, :, 3] = get_p_matrix([m[3] for m in correlations_hat_big], estimated_bi
 ##
 
 # adjust the order of the estimated labels to match the ground truth wkth rev
-sorted_labels = sortperm(estimated.node_labels, rev = false)#, by = x -> (correlations_hat[x, x][3],x))
-sorted_labels_big = sortperm(estimated_big.node_labels, rev=false)#, by = x -> (correlations_hat_big[x, x][3],x))
+sorted_labels = sortperm(estimated.node_labels, rev = true)
+sorted_labels_big = sortperm(estimated_big.node_labels, rev=true)
 
 
-function make_fig()
+function make_fig(size = (580,650))
     colormap = :lipari
-    fig = Figure(size = (730, 800), fontsize =14)
+    fig = Figure(size =size, fontsize =14)
 
     ax = Axis(fig[1, 1], aspect = 1, title = L"\mathrm{pr}(X_1=1)", ylabel = L"W")
     ax2 = Axis(fig[1, 2], aspect = 1, title = L"\mathrm{pr}(X_2=1)")
@@ -215,15 +215,17 @@ function make_fig()
 return fig
 end
 
+with_theme(theme_minimal()) do
+    fig = make_fig((400,490))
+    colgap!(fig.layout, Relative(0.01))
+    display(fig)
+    if SAVE_FIG
+        save("experiments/ground_truth_and_estimated.pdf", fig)
+    end
+end
 
-fig = with_theme(make_fig, theme_minimal())
-colgap!(fig.layout, Relative(0.01))
-fig
 
 ##
 
-if SAVE_FIG
-    save("experiments/ground_truth_and_estimated.pdf", fig)
-end
 
 ##
