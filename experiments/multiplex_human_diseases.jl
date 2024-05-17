@@ -236,6 +236,33 @@ with_theme(theme_latexfonts()) do
     save(joinpath(@__DIR__, "diseasome_all_in_one.pdf"), fig)
 end
 
+## Additional figures
+
+with_theme(theme_latexfonts()) do
+    fig = Figure(size = (850, 400))
+    colormap = :okabe_ito
+    ax = Axis(fig[1, 1], aspect = 1, title = "Sorted by histogram",)
+    ax2 = Axis(fig[1, 2], aspect = 1, title = "Sorted by disease category",)
+    ax3 = Axis(fig[1, 3], aspect = 1, title = "Sorted by degree",)
+
+    heatmap!(ax, A_plot[sorted_labels, sorted_labels],
+        colormap = Makie.Categorical(Reverse(colormap)))
+    heatmap!(ax2, A_plot[sorting_by_category, sorting_by_category],
+        colormap = Makie.Categorical(Reverse(colormap)))
+    pl = heatmap!(ax3, A_plot[sorting_by_degree, sorting_by_degree],
+        colormap = Makie.Categorical(Reverse(colormap)))
+    hidedecorations!.([ax, ax2, ax3], label = false)
+
+    cb = Colorbar(fig[2, :];
+        colormap = Reverse(cgrad(colormap, 4, categorical = true)),
+        limits = (0, 4),
+        label = "Type of connection",
+        vertical = false, width = Relative(0.5), flipaxis = false,
+        ticks = ([0.5, 1.5, 2.5, 3.5], ["None", "Genotype", "Phenotype", "Both"]))
+    display(fig)
+
+    save(joinpath(@__DIR__, "diseasom_multiple_ordering.pdf"), fig)
+end
 
 ## get table of diseases
 using Latexify
