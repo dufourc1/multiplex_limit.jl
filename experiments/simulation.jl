@@ -8,7 +8,7 @@ using MVBernoulli
 using Statistics
 using LaTeXStrings
 
-Random.seed!(12335447245619234863461234326748)
+Random.seed!(1234)
 include("utils.jl")
 
 
@@ -121,6 +121,26 @@ function get_ground_truth_and_adj(n, get_theta = get_tabulation)
     return theta_matrix, P_true, A
 end
 
+n = 100
+w = zeros((n, n, 4))
+for i in 1:n
+    for j in 1:n
+        w[i, j, :] = get_tabulation(i / n, j / n)
+    end
+end
+
+f = Figure()
+ax1 = Axis(f[1, 1], aspect = 1, title = "[0, 0]")
+ax2 = Axis(f[1, 2], aspect = 1, title = "[1, 0]")
+ax3 = Axis(f[2, 1], aspect = 1, title = "[0, 1]")
+ax4 = Axis(f[2, 2], aspect = 1, title = "[1, 1]")
+heatmap!(ax1, w[:, :, 1], colormap = :lipari, colorrange = (0, 1))
+heatmap!(ax2, w[:, :, 2], colormap = :lipari, colorrange = (0, 1))
+heatmap!(ax3, w[:, :, 3], colormap = :lipari, colorrange = (0, 1))
+heatmap!(ax4, w[:, :, 4], colormap = :lipari, colorrange = (0, 1))
+hidedecorations!.([ax1,ax2, ax3, ax4])
+cb = Colorbar(f[1:2, end+1], colorrange = (0, 1), colormap = :lipari, vertical = true, height = Relative(0.8))
+display(f)
 
 
 _, P, A = get_ground_truth_and_adj(100)
@@ -176,56 +196,52 @@ sorted_labels = sortperm(estimated.node_labels, rev = true)
 sorted_labels_big = sortperm(estimated_big.node_labels, rev=true)
 
 
-function make_fig(size = (580,650))
+function make_fig(size = (660,600))
     colormap = :lipari
-    fig = Figure(size =size, fontsize =14)
+    fig = Figure(size =size, fontsize =16)
 
-    ax = Axis(fig[1, 1], aspect = 1, title = L"\mathrm{pr}(X_1=1)", ylabel = L"W")
-    ax2 = Axis(fig[1, 2], aspect = 1, title = L"\mathrm{pr}(X_2=1)")
-    ax3 = Axis(fig[1, 3], aspect = 1, title = L"\mathrm{cor}(X_1, X_2)")
-    ax4 = Axis(fig[2, 1], aspect = 1, ylabel = L"\hat{W},n = 200")
-    ax5 = Axis(fig[2, 2], aspect = 1)
-    ax6 = Axis(fig[2, 3], aspect = 1)
-    ax7 = Axis(fig[3, 1], aspect = 1, ylabel = L"\hat{W},n = 400")
-    ax8 = Axis(fig[3, 2], aspect = 1)
-    ax9 = Axis(fig[3, 3], aspect = 1)
-    heatmap!(ax, P_true[:, :, 1], colormap = colormap, colorrange = (0, 1))
-    heatmap!(ax2, P_true[:, :, 2], colormap = colormap, colorrange = (0, 1))
-    heatmap!(ax3, P_true[:, :, 3], colormap = :balance, colorrange = (-1, 1))
-    heatmap!(ax4, P[sorted_labels, sorted_labels, 1], colormap = colormap, colorrange = (0, 1))
-    heatmap!(ax5, P[sorted_labels, sorted_labels, 2], colormap = colormap,colorrange = (0, 1))
+    ax11 = Axis(fig[1, 1], aspect = 1, ylabel = L"\mathrm{pr}(X_1=1)", title = L"W")
+    ax12 = Axis(fig[1, 2], aspect = 1, title = L"\hat{W},n = 200")
+    ax13 = Axis(fig[1, 3], aspect = 1, title = L"\hat{W},n = 400" )
+    ax21 = Axis(fig[2, 1], aspect = 1, ylabel = L"\mathrm{pr}(X_2=1)")
+    ax22 = Axis(fig[2, 2], aspect = 1)
+    ax23 = Axis(fig[2, 3], aspect = 1)
+    ax31 = Axis(fig[3, 1], aspect = 1, ylabel = L"\mathrm{cor}(X_1, X_2)")
+    ax32 = Axis(fig[3, 2], aspect = 1)
+    ax33 = Axis(fig[3, 3], aspect = 1)
+    heatmap!(ax11, P_true[:, :, 1], colormap = colormap, colorrange = (0, 1))
+    heatmap!(ax21, P_true[:, :, 2], colormap = colormap, colorrange = (0, 1))
+    heatmap!(ax31, P_true[:, :, 3], colormap = :balance, colorrange = (-1, 1))
+    heatmap!(ax12, P[sorted_labels, sorted_labels, 1], colormap = colormap, colorrange = (0, 1))
+    heatmap!(ax22, P[sorted_labels, sorted_labels, 2], colormap = colormap,colorrange = (0, 1))
     heatmap!(
-        ax6, P[sorted_labels, sorted_labels, 3],
+        ax32, P[sorted_labels, sorted_labels, 3],
         colormap = :balance, colorrange=(-1,1))
 
-    heatmap!(ax7, P_big[sorted_labels_big, sorted_labels_big, 1], colormap = colormap, colorrange = (0, 1))
-    heatmap!(ax8, P_big[sorted_labels_big, sorted_labels_big, 2], colormap = colormap, colorrange = (0, 1))
-    heatmap!(ax9, P_big[sorted_labels_big, sorted_labels_big, 3], colormap = :balance, colorrange = (-1, 1))
-    hidedecorations!.([ax2, ax3, ax5, ax6, ax8, ax9])
-    hidedecorations!.([ax, ax4,ax7], label = false)
+    heatmap!(ax13, P_big[sorted_labels_big, sorted_labels_big, 1], colormap = colormap, colorrange = (0, 1))
+    heatmap!(ax23, P_big[sorted_labels_big, sorted_labels_big, 2], colormap = colormap, colorrange = (0, 1))
+    heatmap!(ax33, P_big[sorted_labels_big, sorted_labels_big, 3], colormap = :balance, colorrange = (-1, 1))
+    hidedecorations!.([ax12, ax12, ax22, ax23, ax32, ax33,ax13])
+    hidedecorations!.([ax11, ax21, ax31], label = false)
     rowgap!(fig.layout, Relative(0.01))
 
-    gd = fig[4, 1:3] = GridLayout(1, 3)
+    gd = fig[1:3, 4] = GridLayout(3, 1)
 
-    Colorbar(gd[1,1:2], colorrange = (0, 1), label = "Probability",
-        colormap = colormap, vertical = false, flipaxis = false, width = Relative(0.8))
-    Colorbar(gd[1,3], colorrange = (-1, 1), label = "Correlation",
-        colormap = :balance, vertical = false, flipaxis = false, width = Relative(0.8),
+    Colorbar(gd[1:2,1], colorrange = (0, 1),
+        colormap = colormap, vertical = true, flipaxis = true, height = Relative(0.8))
+    Colorbar(gd[3,1], colorrange = (-1, 1),
+        colormap = :balance, vertical = true, flipaxis = true, height = Relative(0.8),
         ticks = [-1, 0, 1])
 return fig
 end
 
-with_theme(theme_minimal()) do
-    fig = make_fig((400,490))
-    colgap!(fig.layout, Relative(0.01))
+with_theme(theme_latexfonts()) do
+    fig = make_fig()
     display(fig)
     if SAVE_FIG
         save("experiments/ground_truth_and_estimated.pdf", fig)
+        save("experiments/ground_truth_and_estimated.png", fig, px_per_unit = 2)
     end
 end
-
-
-##
-
 
 ##

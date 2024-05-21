@@ -193,8 +193,10 @@ function make_box_corrs(corr_value,P)
         first_node_block[1], last_node_block[1], first_node_block[2], last_node_block[2])
 end
 
+##
+
 with_theme(theme_latexfonts()) do
-    fig = Figure(size = (1000, 360), fontsize = 16)
+    fig = Figure(size = (930, 360), fontsize = 16)
     colormap = :lipari
     colormap_corr = :balance
     corrs_values = sort([c for c in correlation_sorted if !isnan(c)], rev = true)
@@ -226,14 +228,15 @@ with_theme(theme_latexfonts()) do
         ticklabelsize = 12,
         vertical = false, width = Relative(1.0),
         flipaxis = false, ticks = (
-            [0.5, 1.5, 2.5, 3.5], ["None", "Genotype", "Phenotype", "Both"]))
+            [0.5, 1.4, 2.6, 3.5], ["None", "Genotype", "Phenotype", "Both"]))
     Colorbar(fig[2, 2:3], colorrange = (0, 1),
         colormap = colormap, vertical = false, flipaxis = false, width = Relative(0.7), label = "Probability")
     Colorbar(fig[2, 4], colorrange = corr_range, label = "Correlation",
         colormap = colormap_corr, vertical = false, width = Relative(1.0), flipaxis = false)
-    colgap!(fig.layout, 0)
+    #colgap!(fig.layout, 0)
     display(fig)
     save(joinpath(@__DIR__, "diseasome_all_in_one.pdf"), fig)
+    save(joinpath(@__DIR__, "diseasome_all_in_one.png"), fig, px_per_unit = 2)
 end
 
 ## Additional figures
@@ -262,6 +265,7 @@ with_theme(theme_latexfonts()) do
     display(fig)
 
     save(joinpath(@__DIR__, "diseasom_multiple_ordering.pdf"), fig)
+    save(joinpath(@__DIR__, "diseasom_multiple_ordering.png"), fig, px_per_unit = 2)
 end
 
 ## get table of diseases
