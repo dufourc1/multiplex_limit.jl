@@ -98,3 +98,22 @@ function count_matches(x, y)
     end
     matches
 end
+
+
+
+softmax(x::AbstractArray{T}; dims = 1) where {T} = softmax!(similar(x, float(T)), x; dims)
+
+softmax!(x::AbstractArray; dims = 1) = softmax!(x, x; dims)
+
+function softmax!(out::AbstractArray{T}, x::AbstractArray; dims = 1) where {T}
+    max_ = maximum(x; dims)
+    if all(isfinite, max_)
+        @fastmath out .= exp.(x .- max_)
+    else
+        _zero, _one, _inf = T(0), T(1), T(Inf)
+        @fastmath @. out = ifelse(
+            isequal(max_, _inf), ifelse(isequal(x, _inf), _one, _zero), exp(x - max_))
+    end
+    tmp = dims isa Colon ? sum(out) : sum!(max_, out)
+    out ./= tmp
+end

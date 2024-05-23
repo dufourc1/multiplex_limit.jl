@@ -8,28 +8,11 @@ using MVBernoulli
 using Statistics
 using LaTeXStrings
 
-Random.seed!(1234)
+Random.seed!(12345)
 include("utils.jl")
 
 
 SAVE_FIG = true
-
-softmax(x::AbstractArray{T}; dims = 1) where {T} = softmax!(similar(x, float(T)), x; dims)
-
-softmax!(x::AbstractArray; dims = 1) = softmax!(x, x; dims)
-
-function softmax!(out::AbstractArray{T}, x::AbstractArray; dims = 1) where {T}
-    max_ = maximum(x; dims)
-    if all(isfinite, max_)
-        @fastmath out .= exp.(x .- max_)
-    else
-        _zero, _one, _inf = T(0), T(1), T(Inf)
-        @fastmath @. out = ifelse(
-            isequal(max_, _inf), ifelse(isequal(x, _inf), _one, _zero), exp(x - max_))
-    end
-    tmp = dims isa Colon ? sum(out) : sum!(max_, out)
-    out ./= tmp
-end
 
 function display_approx_and_data(P, A, sorting; label = "", colormap = :lipari)
     fig = Figure(size = (800, 500))
@@ -150,7 +133,8 @@ display(display_approx_and_data(P, A, 1:100, label = "Ground truth, n = 100"))
 
 ##
 
-n = 200
+n_small = 300
+n = n_small
 _, P_true, A = get_ground_truth_and_adj(n)
 estimator, history = graphhist(A;
     starting_assignment_rule = EigenStart(),
@@ -170,7 +154,9 @@ P[:, :, 3] = get_p_matrix([m[3] for m in correlations_hat], estimated.node_label
 sorted_labels = sortperm(estimated.node_labels, rev = true)
 
 
-n = 400
+n_big = 500
+n = n_big
+
 _, P_true, A = get_ground_truth_and_adj(n)
 estimator_big, history = graphhist(A;
     starting_assignment_rule = EigenStart(),
@@ -193,16 +179,16 @@ P_big[:, :, 3] = get_p_matrix([m[3] for m in correlations_hat_big], estimated_bi
 
 # adjust the order of the estimated labels to match the ground truth wkth rev
 sorted_labels = sortperm(estimated.node_labels, rev = true)
-sorted_labels_big = sortperm(estimated_big.node_labels, rev=true)
+sorted_labels_big = sortperm(estimated_big.node_labels, rev=false)
 
 
-function make_fig(size = (660,600))
+function make_fig(size = (570,500))
     colormap = :lipari
     fig = Figure(size =size, fontsize =16)
 
     ax11 = Axis(fig[1, 1], aspect = 1, ylabel = L"\mathrm{pr}(X_1=1)", title = L"W")
-    ax12 = Axis(fig[1, 2], aspect = 1, title = L"\hat{W},n = 200")
-    ax13 = Axis(fig[1, 3], aspect = 1, title = L"\hat{W},n = 400" )
+    ax12 = Axis(fig[1, 2], aspect = 1, title = L"\hat{W},\, n = %$n_small")
+    ax13 = Axis(fig[1, 3], aspect = 1, title = L"\hat{W},\, n = %$n_big" )
     ax21 = Axis(fig[2, 1], aspect = 1, ylabel = L"\mathrm{pr}(X_2=1)")
     ax22 = Axis(fig[2, 2], aspect = 1)
     ax23 = Axis(fig[2, 3], aspect = 1)
@@ -224,14 +210,15 @@ function make_fig(size = (660,600))
     hidedecorations!.([ax12, ax12, ax22, ax23, ax32, ax33,ax13])
     hidedecorations!.([ax11, ax21, ax31], label = false)
     rowgap!(fig.layout, Relative(0.01))
+    colgap!(fig.layout, Relative(0.01))
 
     gd = fig[1:3, 4] = GridLayout(3, 1)
 
     Colorbar(gd[1:2,1], colorrange = (0, 1),
         colormap = colormap, vertical = true, flipaxis = true, height = Relative(0.8))
-    Colorbar(gd[3,1], colorrange = (-1, 1),
+    Colorbar(gd[3,1], colorrange = (-1.0, 1.0),
         colormap = :balance, vertical = true, flipaxis = true, height = Relative(0.8),
-        ticks = [-1, 0, 1])
+        ticks = [-1.0, 0.0, 1.0])
 return fig
 end
 
@@ -239,7 +226,7 @@ with_theme(theme_latexfonts()) do
     fig = make_fig()
     display(fig)
     if SAVE_FIG
-        save("experiments/ground_truth_and_estimated.pdf", fig)
+        #save("experiments/ground_truth_and_estimated.pdf", fig)
         save("experiments/ground_truth_and_estimated.png", fig, px_per_unit = 2)
     end
 end

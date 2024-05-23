@@ -3,6 +3,7 @@ using CairoMakie
 using DataFrames
 using CSV
 using Statistics
+using StatsBase
 
 include("utils.jl")
 
@@ -30,9 +31,9 @@ for i in 1:n
 end
 
 etype_to_layers = Dict(
-    "aa" => 1,
+    "aa" => 2,
     "da" => 3,
-    "dd" => 2,
+    "dd" => 1,
     "ad" => 3,
 )
 
@@ -145,9 +146,9 @@ min_shapes = size(estimmated_block.θ, 1)
 
 ##
 
-#estimated, bic = NetworkHistogram.get_best_smoothed_estimator(estimator,A; n_max = 52, n_min = 52)
+max_shapes = 100
+estimated, bic = NetworkHistogram.get_best_smoothed_estimator(estimator,A; n_max = max_shapes, n_min = min_shapes)
 
-estimated = NetworkHistogram.GraphShapeHist(52, estimator)
 
 ## extract the marginals and correlations
 using MVBernoulli
@@ -156,14 +157,17 @@ mvberns = MVBernoulli.from_tabulation.(estimated.θ)
 marginals = MVBernoulli.marginals.(mvberns)
 correlation = [c[3] for c in MVBernoulli.correlation_matrix.(mvberns)]
 
+
+sorting_by(x) =  (marginals[x, x][2], x)
+
 sorted_groups = sortperm(1:length(unique(estimated.node_labels)), rev = true,
-    by = x -> (marginals[x, x][1], x)
+    by = x -> sorting_by(x)
 )
 
 sorted_nodes = sortperm(
     estimated.node_labels,
     rev = true,
-    by = x -> (marginals[x, x][1],  x)
+    by = x -> sorting_by(x)
 )
 
 for i in eachindex(estimated.node_labels)
@@ -226,6 +230,7 @@ A_plot_big[findall(A[:,:,1] .== 1)] .= 1
 A_plot_big[findall(A[:,:,2] .== 1)] .= 2
 A_plot_big[findall(A[:,:,3] .== 1)] .= 3
 A_plot = A_plot_big# dropdims(sum(A_plot_big, dims = 3), dims = 3)
+colornames = ["None", findfirst(x -> x == 1, etype_to_layers), findfirst(x -> x == 2, etype_to_layers), findfirst(x -> x == 3, etype_to_layers)]
 
 
 ##
@@ -274,7 +279,7 @@ with_theme(theme_latexfonts()) do
         limits = (0, 4),
         label = "Type of connection",
         vertical = true, height = Relative(0.7), flipaxis = true,
-        ticks = ([0.5, 1.5, 2.5, 3.5], ["None", "a-a", "d-d", "a-d or d-a"]))
+        ticks = ([0.5, 1.5, 2.5, 3.5], colornames))
     display(fig)
     save("fly_larva.png", fig, px_per_unit = 1)
 end
@@ -288,9 +293,9 @@ P_power = P .^1
 with_theme(theme_latexfonts()) do
     fig = Figure(size = (850, 400), fontsize = 16)
     colormap = :lipari
-    ax = Axis(fig[1, 1], aspect = 1, title = "a-a")
-    ax1 = Axis(fig[1, 2], aspect = 1, title = "d-d")
-    ax2 = Axis(fig[1, 3], aspect = 1, title = "d-a or a-d")
+    ax = Axis(fig[1, 1], aspect = 1, title = findfirst(x -> x == 1, etype_to_layers))
+    ax1 = Axis(fig[1, 2], aspect = 1, title = findfirst(x -> x == 2, etype_to_layers))
+    ax2 = Axis(fig[1, 3], aspect = 1, title = findfirst(x -> x == 3, etype_to_layers))
     hidedecorations!.([ax, ax1, ax2])
 
     for (i, ax) in enumerate([ax, ax1, ax2])
@@ -307,9 +312,9 @@ using StatsBase
 with_theme(theme_latexfonts()) do
     fig = Figure(size = (850, 400), fontsize = 16)
     colormap = :lipari
-    ax = Axis(fig[1, 1], aspect = 1, title = "a-a")
-    ax1 = Axis(fig[1, 2], aspect = 1, title = "d-d")
-    ax2 = Axis(fig[1, 3], aspect = 1, title = "d-a or a-d")
+    ax = Axis(fig[1, 1], aspect = 1, title = findfirst(x -> x == 1, etype_to_layers))
+    ax1 = Axis(fig[1, 2], aspect = 1, title = findfirst(x -> x == 2, etype_to_layers))
+    ax2 = Axis(fig[1, 3], aspect = 1, title = findfirst(x -> x == 3, etype_to_layers))
     hidedecorations!.([ax, ax1, ax2])
     counts = countmap(hemishphere)
     for (i, ax) in enumerate([ax, ax1, ax2])
