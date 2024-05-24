@@ -9,24 +9,22 @@ struct Multiplexon{T}
     θ::Matrix{MultivariateBernoulli{T}}
     π::Vector{T}
     num_layers::Int
-end
-
-
-function Multiplexon(θ::Matrix{MultivariateBernoulli{T}}, π::Vector{T},
-        num_layers::Int = size(θ[1, 1], 1)) where {T}
-    if size(θ, 1) != size(θ, 2)
-        throw(ArgumentError("θ must be square"))
+    function Multiplexon(θ::Matrix{MultivariateBernoulli{T}}, π::Vector{T},
+            num_layers::Int = size(θ[1, 1], 1)) where {T}
+        if size(θ, 1) != size(θ, 2)
+            throw(ArgumentError("θ must be square"))
+        end
+        if length(π) != size(θ, 1)
+            throw(ArgumentError("π must have the same length as the side of θ"))
+        end
+        if any(π .< 0)
+            throw(ArgumentError("π must be a proportional to a probability distribution"))
+        end
+        if abs(sum(π) - 1) > 1e-6
+            π = π ./ sum(π)
+        end
+        return Multiplexon{T}(θ, π, num_layers)
     end
-    if length(π) != size(θ, 1)
-        throw(ArgumentError("π must have the same length as the side of θ"))
-    end
-    if any(π .< 0)
-        throw(ArgumentError("π must be a proportional to a probability distribution"))
-    end
-    if abs(sum(π) - 1) > 1e-6
-        π = π ./ sum(π)
-    end
-    return Multiplexon{T}(θ, π, num_layers)
 end
 
 

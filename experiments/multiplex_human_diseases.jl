@@ -174,6 +174,14 @@ P[:, :, 1] = get_p_matrix([m[1] for m in marginals_sorted], estimated.node_label
 P[:, :, 2] = get_p_matrix([m[2] for m in marginals_sorted], estimated.node_labels)
 P[:, :, 3] = get_p_matrix(correlation_sorted, estimated.node_labels)
 
+P_mom = zeros(n, n, 3)
+P_mom[:, :, 1] = get_p_matrix([m[1] for m in marginals_sorted], estimated.node_labels)
+P_mom[:, :, 2] = get_p_matrix([m[2] for m in marginals_sorted], estimated.node_labels)
+P_mom[:, :, 3] = get_p_matrix(
+    [m.tabulation.p[4] for m in mvberns_sorted], estimated.node_labels)
+
+
+
 ## main plot
 A_plot_big = deepcopy(A)
 A_plot_big[:, :, 1] .*= 1
@@ -239,6 +247,88 @@ with_theme(theme_latexfonts()) do
     save(joinpath(@__DIR__, "diseasome_all_in_one.png"), fig, px_per_unit = 2)
 end
 
+
+##
+
+with_theme(theme_latexfonts()) do
+    fig = Figure(size = (700, 300), fontsize = 16)
+    colormap_corr = :balance
+    corrs_values = sort([c for c in correlation_sorted if !isnan(c)], rev = true)
+    max_abs_corr = max(0.5, maximum(abs.(corrs_values)))
+    corr_range = (-max_abs_corr, max_abs_corr)
+    ax = Axis(fig[1, 1], aspect = 1, title = "Observed network")
+    ax2 = Axis(fig[1, 2], aspect = 1, title = "Fitted correlation")
+    hidedecorations!.([ax, ax2])
+
+    heatmap!(ax, A_plot[sorted_labels, sorted_labels],
+        colormap = Makie.Categorical(Reverse(:okabe_ito)))
+    heatmap!(ax2, P[sorted_labels, sorted_labels, 3],
+        colormap = colormap_corr, colorrange = corr_range)
+
+    for c in corrs_values[1:1]
+        box_corrs = make_box_corrs(c, P)
+        wireframe!(ax, box_corrs, color = :red)
+    end
+    cb = Colorbar(fig[1, 0];
+        colormap = Reverse(cgrad(:okabe_ito, 4, categorical = true)),
+        limits = (0, 4),
+        ticklabelsize = 12,
+        vertical = true, height = Relative(0.9),
+        flipaxis = false, ticks = (
+            [0.5, 1.4, 2.6, 3.5], ["None", "Genotype", "Phenotype", "Both"]))
+    Colorbar(fig[1, 3], colorrange = corr_range,
+        colormap = colormap_corr, vertical = true, height = Relative(0.9), flipaxis = true)
+    #colgap!(fig.layout, 0)
+    display(fig)
+    save(joinpath(@__DIR__, "diseasom_matrix_fitted_corr.png"), fig, px_per_unit = 2)
+end
+
+##
+
+P_mom_to_plot = P_mom.^1
+
+with_theme(theme_latexfonts()) do
+    fig = Figure(size = (930, 360), fontsize = 16)
+    colormap = :lipari
+    colormap_corr = :balance
+    corrs_values = sort([c for c in correlation_sorted if !isnan(c)], rev = true)
+    max_abs_corr = max(0.5, maximum(abs.(corrs_values)))
+    corr_range = (-max_abs_corr, max_abs_corr)
+    ax = Axis(fig[1, 1], aspect = 1, title = "Observed network")
+    ax1 = Axis(fig[1, 2], aspect = 1, title = "Fitted genotype layer")
+    ax2 = Axis(fig[1, 3], aspect = 1, title = "Fitted phenotype layer")
+    ax3 = Axis(fig[1, 4], aspect = 1, title = "Probability both")
+    hidedecorations!.([ax, ax1, ax2, ax3])
+
+    heatmap!(ax, A_plot[sorted_labels, sorted_labels],
+        colormap = Makie.Categorical(Reverse(:okabe_ito)))
+    heatmap!(
+        ax1, P_mom_to_plot[sorted_labels, sorted_labels, 1], colormap = colormap, colorrange = (0, 1))
+    heatmap!(
+        ax2, P_mom_to_plot[sorted_labels, sorted_labels, 2], colormap = colormap, colorrange = (0, 1))
+    heatmap!(ax3, P_mom_to_plot[sorted_labels, sorted_labels, 3],
+        colormap = colormap, colorrange = (0,1))
+
+    for c in corrs_values[1:1]
+        box_corrs = make_box_corrs(c, P)
+        wireframe!(ax, box_corrs, color = :red)
+    end
+    cb = Colorbar(fig[2, 1];
+        colormap = Reverse(cgrad(:okabe_ito, 4, categorical = true)),
+        limits = (0, 4),
+        label = "Type of connection",
+        ticklabelsize = 12,
+        vertical = false, width = Relative(1.0),
+        flipaxis = false, ticks = (
+            [0.5, 1.4, 2.6, 3.5], ["None", "Genotype", "Phenotype", "Both"]))
+    Colorbar(fig[2, 2:3], colorrange = (0, 1),
+        colormap = colormap, vertical = false, flipaxis = false, width = Relative(0.7), label = "Probability")
+    #colgap!(fig.layout, 0)
+    display(fig)
+end
+
+
+
 ## Additional figures
 
 with_theme(theme_latexfonts()) do
@@ -284,6 +374,7 @@ for c in corrs_values[1:3]
     println("correlation value: ", c)
 
     indices_group = (findall(x -> x == c, correlation_sorted))
+    println("Group indices: ", Tuple.(indices_group))
     indices_node_group = [x[1] for x in indices_group]
     indices_group = filter(x -> Tuple(x)[1] <= Tuple(x)[2], indices_group)
     diseases_highest_correlation = vcat(split.(filter(x -> x.Community ∈ indices_node_group, df).Diseases, ", ")...)
