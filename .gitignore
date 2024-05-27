@@ -5,3 +5,6 @@
 /docs/Manifest.toml
 /docs/build/
 /data/
+/experiments/sim_rate/
+experiments/sim_rate/
+sim_rate/
