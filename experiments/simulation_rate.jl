@@ -9,11 +9,13 @@ using LaTeXStrings
 using ProgressMeter
 using StatsBase
 using Base.Threads
+using ParallelKMeans
 
 Random.seed!(1234)
 include("utils.jl")
 
 
+display_fig = true
 
 function get_tabulation_abs_min(x,y)
     tabulation = zeros(4)
@@ -84,7 +86,6 @@ end
 
 ##
 
-
 if false
     n = 100
     w_min_max= zeros((n, n, 4))
@@ -134,25 +135,38 @@ function mse(
     return mean(mse.(a, b))
 end
 
-function estimate_and_mse(n, rep, get_tabulation)
+function estimate_and_mse(n, rep, get_tabulation; alpha = 0, beta = 1)
     mse_inter = -1 .* ones(rep)
-    h = 1/sqrt(n)
     n_shapes = zeros(rep)
     resolution_shapes = zeros(rep)
-    @Threads.threads for i in 1:rep
+    for i in 1:rep
         latents = rand(n)
         theta_star, _, A = get_ground_truth_and_adj(n, latents,get_tabulation)
-        estimator, history = graphhist(A; #h=h,
-            starting_assignment_rule = RandomStart(),
-            maxitr = Int(1e7),
-            stop_rule = PreviousBestValue(10000))
-        n_max = length(unique(estimator.θ))
-        n_min = binomial(NetworkHistogram.get_num_blocks(estimator), 2)
-        if n_max < n_min
-            n_min = 1
+        if alpha == 0
+            h = NetworkHistogram.select_bandwidth(A)
+        else
+            h = n^(-1/(alpha+1))
         end
-        estimated, bic = NetworkHistogram.get_best_smoothed_estimator(estimator,A; show_progress = false, n_max = n_max, n_min = n_min)
-        #estimated = NetworkHistogram.GraphShapeHist(estimator)
+
+        estimator, history = graphhist(A; h=h,
+            starting_assignment_rule = EigenStart(),
+            maxitr = Int(1e7),
+            stop_rule = PreviousBestValue(1000))
+        #min_shapes = NetworkHistogram.get_num_blocks(estimator)
+        #min_shapes = binomial(min_shapes, 2)
+        if beta == 0 || alpha == 0
+            estimated, bic = NetworkHistogram.get_best_smoothed_estimator(
+                estimator, A; show_progress = true, max_iterations_stalled = 10, algo = Yinyang(), n_min = 20)
+            if display_fig
+                display(lines(bic[1], bic[2], color = :black))
+            end
+        elseif beta == 1
+            estimated = NetworkHistogram.GraphShapeHist(estimator)
+        else
+            num_shapes = round(Int64, n^(2/(beta*(min(alpha,1) +1))))
+            estimated = NetworkHistogram.GraphShapeHist(num_shapes, estimator, Hamerly())
+        end
+
         mvberns_hat = MVBernoulli.from_tabulation.(estimated.θ)
         p_berns_hat = similar(theta_star)
         for i in 1:n
@@ -176,6 +190,7 @@ end
 ns = 300:200:2000
 rep = 10
 
+
 ns_smooth = ns[1]:ns[end]
 
 ##
@@ -189,13 +204,15 @@ resolution_shapes = ones(length(ns))
 std_resolution_shapes = ones(length(ns))
 resolution_shapes = ones(length(ns))
 
+beta = 1.6
+
 
 
 @showprogress for (index, n) in enumerate(ns)
-    mse_n[index], std_mse[index], n_shapes[index], std_n_shapes[index], resolution_shapes[index], std_resolution_shapes[index] = estimate_and_mse(n, rep, get_tabulation_abs_min)
+    mse_n[index], std_mse[index], n_shapes[index], std_n_shapes[index], resolution_shapes[index], std_resolution_shapes[index] = estimate_and_mse(n, rep, get_tabulation_abs_min, alpha = 1, beta=beta)
 end
 
-save("experiments/sim_rate/simple.jld", "mse", mse_n, "std_mse", std_mse, "n_shapes", n_shapes, "std_n_shapes", std_n_shapes, "resolution_shapes", resolution_shapes, "std_resolution_shapes", std_resolution_shapes)
+save("experiments/sim_rate/simple_smoothed.jld", "mse", mse_n, "std_mse", std_mse, "n_shapes", n_shapes, "std_n_shapes", std_n_shapes, "resolution_shapes", resolution_shapes, "std_resolution_shapes", std_resolution_shapes)
 
 ##
 
@@ -227,11 +244,14 @@ with_theme(theme_latexfonts()) do
     errorbars!(axis, ns, mse_n, std_mse,
         color = :black, whiskerwidth = 10)
     axislegend(axis)
-    #display(fig)
+    if display_fig
+        display(fig)
+    end
     save("experiments/multiplex_limit_rate.png", fig, px_per_unit = 2)
 end
 
 ##
+beta_complex = 2.2
 
 
 std_mse_complex = zeros(length(ns))
@@ -245,15 +265,15 @@ resolution_shapes_complex = ones(length(ns))
 
 @showprogress for (index, n) in enumerate(ns)
     mse_n_complex[index], std_mse_complex[index], n_shapes_complex[index], std_n_shapes_complex[index], resolution_shapes_complex[index], std_resolution_shapes_complex[index] = estimate_and_mse(
-        n, rep, get_tabulation_weird)
+        n, rep, get_tabulation_weird, alpha = 0.5, beta = beta_complex)
 end
 
-save("experiments/sim_rate/complex.jld", "mse", mse_n_complex, "std_mse", std_mse_complex, "n_shapes", n_shapes_complex, "std_n_shapes", std_n_shapes_complex, "resolution_shapes", resolution_shapes_complex, "std_resolution_shapes", std_resolution_shapes_complex)
+save("experiments/sim_rate/complex_smoothed.jld", "mse", mse_n_complex, "std_mse", std_mse_complex, "n_shapes", n_shapes_complex, "std_n_shapes", std_n_shapes_complex, "resolution_shapes", resolution_shapes_complex, "std_resolution_shapes", std_resolution_shapes_complex)
 ##
 
 alpha_complex = 0.5
 L = 4
-constant_complex = 0.027
+constant_complex = 0.09
 
 
 power_holder_smooth_complex = -2 * alpha_complex / (alpha_complex + 1)
@@ -279,13 +299,16 @@ with_theme(theme_latexfonts()) do
     errorbars!(axis, ns, mse_n_complex, std_mse_complex,
         color = :black, whiskerwidth = 10)
     axislegend(axis)
-    #display(fig)
+    if display_fig
+        display(fig)
+    end
     save("experiments/multiplex_limit_rate_higher_alpha.png", fig, px_per_unit = 2)
 end
 
 
 
 ##
+beta_sin = 1.7
 
 
 function get_tabulation_sin(x, y)
@@ -312,11 +335,11 @@ resolution_shapes_sin = ones(length(ns))
 
 @showprogress for (index, n) in enumerate(ns)
     mse_n_sin[index], std_mse_sin[index],n_shapes_sin[index], std_n_shapes_sin[index], resolution_shapes_sin[index], std_resolution_shapes_sin[index] = estimate_and_mse(
-        n, rep, get_tabulation_sin)
+        n, rep, get_tabulation_sin, alpha = 1, beta = beta_sin)
 end
 
 
-save("experiments/sim_rate/sin.jld", "mse", mse_n_sin, "std_mse", std_mse_sin, "n_shapes", n_shapes_sin, "std_n_shapes", std_n_shapes_sin, "resolution_shapes", resolution_shapes_sin, "std_resolution_shapes", std_resolution_shapes_sin)
+save("experiments/sim_rate/sin_smoothed.jld", "mse", mse_n_sin, "std_mse", std_mse_sin, "n_shapes", n_shapes_sin, "std_n_shapes", std_n_shapes_sin, "resolution_shapes", resolution_shapes_sin, "std_resolution_shapes", std_resolution_shapes_sin)
 ##
 
 alpha_sin = 1
@@ -347,7 +370,9 @@ with_theme(theme_latexfonts()) do
     errorbars!(axis, ns, mse_n_sin, std_mse_sin,
         color = :black, whiskerwidth = 10)
     axislegend(axis)
-    #display(fig)
+    if display_fig
+        display(fig)
+    end
     save("experiments/multiplex_limit_rate_sin.png", fig, px_per_unit = 2)
 end
 
@@ -410,7 +435,9 @@ for show_std in [true,false]
             [L"C_1\left(\log(n)/n + 4 n^{-1}\right)", L"W_1", L"W_3",
                 L"C_{0.5}\left(\log(n)/n + 4 n^{-2/3}\right)", L"W_2"], nbanks = 3, position = :rt,
                 margin = (5,10,5,10))
-        #display(fig)
+        if display_fig
+            display(fig)
+        end
         file_name = show_std ? "experiments/multiplex_limit_rate_all_std.png" : "experiments/multiplex_limit_rate_all.png"
         save(file_name, fig, px_per_unit = 2)
     end
@@ -445,16 +472,18 @@ with_theme(theme_latexfonts()) do
         [L"\sqrt{n}", L"W_1", L"W_3",
             L"n^{2/3}", L"W_2"], nbanks = 3, position = :lt,
         margin = (5, 10, 5, 10))
-    #display(fig)
+    if display_fig
+        display(fig)
+    end
     save("experiments/multiplex_limit_rate_resolution.png", fig, px_per_unit = 2)
 end
 
 
 ##
 
-ub_shapes = binomial.(ub_resolution, 2)
-ub_shapes_sin = binomial.(ub_resolution_sin, 2)
-ub_shapes_complex = binomial.(ub_resolution_complex, 2)
+ub_shapes = binomial.(ub_resolution .+1, 2)
+ub_shapes_sin = binomial.(ub_resolution_sin .+1, 2)
+ub_shapes_complex = binomial.(ub_resolution_complex .+1, 2)
 
 with_theme(theme_latexfonts()) do
     fig = Figure(size = (800, 300), fontsize = 16)
@@ -477,6 +506,20 @@ with_theme(theme_latexfonts()) do
         [L"\sqrt{n}", L"W_1", L"W_3",
             L"n^{2/3}", L"W_2"], nbanks = 3, position = :lt,
         margin = (5, 10, 5, 10))
-    #display(fig)
+    if display_fig
+        display(fig)
+    end
     save("experiments/multiplex_limit_rate_n_shapes.png", fig, px_per_unit = 2)
 end
+
+
+##
+
+# compute betas
+beta = log.(resolution_shapes) .* 2 ./ log.(n_shapes)
+beta_sin = log.(resolution_shapes_sin) .* 2 ./ log.(n_shapes_sin)
+beta_complex = log.(resolution_shapes_complex) .* 2 ./ log.(n_shapes_complex)
+
+println("β: $(mean(beta)) ± $(std(beta))")
+println("β_sin: $(mean(beta_sin)) ± $(std(beta_sin))")
+println("β_complex: $(mean(beta_complex)) ± $(std(beta_complex))")

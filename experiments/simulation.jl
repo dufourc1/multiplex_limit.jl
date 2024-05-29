@@ -142,6 +142,8 @@ estimator, history = graphhist(A;
     stop_rule = PreviousBestValue(10000))
 
 estimated, bic_values = NetworkHistogram.get_best_smoothed_estimator(estimator, A)
+estimated_block = NetworkHistogram.GraphShapeHist(estimator)
+
 
 mvberns_hat = MVBernoulli.from_tabulation.(estimated.θ)
 marginals_hat = MVBernoulli.marginals.(mvberns_hat)
@@ -152,6 +154,106 @@ P[:, :, 1] = get_p_matrix([m[1] for m in marginals_hat], estimated.node_labels)
 P[:, :, 2] = get_p_matrix([m[2] for m in marginals_hat], estimated.node_labels)
 P[:, :, 3] = get_p_matrix([m[3] for m in correlations_hat], estimated.node_labels)
 sorted_labels = sortperm(estimated.node_labels, rev = true)
+sorted_labels_block = sortperm(estimated_block.node_labels, rev = true)
+
+
+mvberns_block = MVBernoulli.from_tabulation.(estimated_block.θ)
+
+##
+
+P_tabulation_true = zeros(n, n, 4)
+for i in 1:n
+    for j in 1:n
+        P_tabulation_true[i, j, :] = get_tabulation(i / n, j / n)
+    end
+end
+
+
+
+P_tabulation = zeros(n, n, 4)
+P_tabulation_block = zeros(n, n, 4)
+for i in 1:4
+    P_tabulation[:, :, i] = get_p_matrix([m.tabulation.p[i] for m in mvberns_hat], estimated.node_labels)
+    P_tabulation_block[:, :, i] = get_p_matrix(
+        [m.tabulation.p[i] for m in mvberns_block], estimated_block.node_labels)[sorted_labels_block, sorted_labels_block]
+end
+
+with_theme(theme_latexfonts()) do
+    colormap = :lipari
+    fig = Figure(size = (600, 300), fontsize = 16)
+    ax11 = Axis(fig[1, 1], aspect = 1, title = L"w^{(1)}", ylabel = L"W")
+    ax12 = Axis(fig[1, 2], aspect = 1, title = L"w^{(2)}")
+    ax13 = Axis(fig[1, 3], aspect = 1, title = L"w^{(3)}")
+    ax14 = Axis(fig[1, 4], aspect = 1, title = L"w^{(4)}")
+    ax21 = Axis(fig[2, 1], aspect = 1, ylabel = L"\hat{W}")
+    ax22 = Axis(fig[2, 2], aspect = 1)
+    ax23 = Axis(fig[2, 3], aspect = 1)
+    ax24 = Axis(fig[2, 4], aspect = 1)
+    heatmap!(ax11, P_tabulation_true[:, :, 1], colormap = colormap, colorrange = (0, 1))
+    heatmap!(ax12, P_tabulation_true[:, :, 2], colormap = colormap, colorrange = (0, 1))
+    heatmap!(ax13, P_tabulation_true[:, :, 3], colormap = colormap, colorrange = (0,1))
+    heatmap!(ax14, P_tabulation_true[:, :, 4], colormap = colormap, colorrange = (0, 1))
+    heatmap!(ax21, P_tabulation[sorted_labels, sorted_labels, 1], colormap = colormap, colorrange = (0, 1))
+    heatmap!(ax22, P_tabulation[sorted_labels, sorted_labels, 2], colormap = colormap, colorrange = (0, 1))
+    heatmap!(ax23, P_tabulation[sorted_labels, sorted_labels, 3], colormap = colormap, colorrange = (0, 1))
+    heatmap!(ax24, P_tabulation[sorted_labels, sorted_labels, 4], colormap = colormap, colorrange = (0, 1))
+    hidedecorations!.([ax12, ax13, ax14, ax22, ax23, ax24])
+    hidedecorations!.([ax11, ax21], label = false)
+    rowgap!(fig.layout, Relative(0.01))
+    colgap!(fig.layout, Relative(0.01))
+
+    gd = fig[1:2, 5] = GridLayout(1, 1)
+
+    Colorbar(gd[1, 1], colorrange = (0, 1),
+        colormap = colormap, vertical = true, flipaxis = true, height = Relative(0.8))
+    display(fig)
+    if SAVE_FIG
+        save("experiments/decorated_graphon_and_approx.png", fig, px_per_unit = 2)
+    end
+end
+
+
+
+with_theme(theme_latexfonts()) do
+    colormap = :lipari
+    fig = Figure(size = (600, 300), fontsize = 16)
+    ax11 = Axis(fig[1, 1], aspect = 1, title = L"w^{(1)}", ylabel = L"SBM")
+    ax12 = Axis(fig[1, 2], aspect = 1, title = L"w^{(2)}")
+    ax13 = Axis(fig[1, 3], aspect = 1, title = L"w^{(3)}")
+    ax14 = Axis(fig[1, 4], aspect = 1, title = L"w^{(4)}")
+    ax21 = Axis(fig[2, 1], aspect = 1, ylabel = L"SSM")
+    ax22 = Axis(fig[2, 2], aspect = 1)
+    ax23 = Axis(fig[2, 3], aspect = 1)
+    ax24 = Axis(fig[2, 4], aspect = 1)
+    heatmap!(ax11, P_tabulation_block[:, :, 1], colormap = colormap, colorrange = (0, 1))
+    heatmap!(ax12, P_tabulation_block[:, :, 2], colormap = colormap, colorrange = (0, 1))
+    heatmap!(ax13, P_tabulation_block[:, :, 3], colormap = colormap, colorrange = (0, 1))
+    heatmap!(ax14, P_tabulation_block[:, :, 4], colormap = colormap, colorrange = (0, 1))
+    heatmap!(ax21, P_tabulation[sorted_labels, sorted_labels, 1],
+        colormap = colormap, colorrange = (0, 1))
+    heatmap!(ax22, P_tabulation[sorted_labels, sorted_labels, 2],
+        colormap = colormap, colorrange = (0, 1))
+    heatmap!(ax23, P_tabulation[sorted_labels, sorted_labels, 3],
+        colormap = colormap, colorrange = (0, 1))
+    heatmap!(ax24, P_tabulation[sorted_labels, sorted_labels, 4],
+        colormap = colormap, colorrange = (0, 1))
+    hidedecorations!.([ax12, ax13, ax14, ax22, ax23, ax24])
+    hidedecorations!.([ax11, ax21], label = false)
+    rowgap!(fig.layout, Relative(0.01))
+    colgap!(fig.layout, Relative(0.01))
+
+    gd = fig[1:2, 5] = GridLayout(1, 1)
+
+    Colorbar(gd[1, 1], colorrange = (0, 1),
+        colormap = colormap, vertical = true, flipaxis = true, height = Relative(0.8))
+    display(fig)
+    if SAVE_FIG
+        save("experiments/SBM_SSM.png", fig, px_per_unit = 2)
+    end
+end
+##
+
+
 
 
 n_big = 500

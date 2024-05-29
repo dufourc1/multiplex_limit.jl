@@ -4,7 +4,7 @@ using Statistics
 using CairoMakie
 using Random
 Random.seed!(1234)
-
+using ParallelKMeans
 ##
 
 # Load the data
@@ -137,7 +137,7 @@ lines!(ax, get(history.history, :best_likelihood)...)
 display(fig)
 
 estimated, bic_values = NetworkHistogram.get_best_smoothed_estimator(estimator, A)
-
+block_estimated = NetworkHistogram.GraphShapeHist(estimator)
 
 ## extract the marginals and correlations
 using MVBernoulli
@@ -147,11 +147,13 @@ mvberns = MVBernoulli.from_tabulation.(estimated.θ)
 marginals = MVBernoulli.marginals.(mvberns)
 correlation = [c[3] for c in MVBernoulli.correlation_matrix.(mvberns)]
 
+#sorting_function = x -> (marginals[x, x][2], correlation[x, x], x)
+sorting_function = x -> (correlation[x,x], marginals[x, x][1], x)
 
 sorted_groups = sortperm(1:length(unique(estimated.node_labels)), rev = true,
-    by = x -> (marginals[x, x][2], correlation[x,x], x))
+    by =sorting_function)
 
-sorted_nodes = sortperm(estimated.node_labels, rev = true, by = x -> (marginals[x, x][2], correlation[x,x], x))
+sorted_nodes = sortperm(estimated.node_labels, rev = true, by = sorting_function)
 
 for i in eachindex(estimated.node_labels)
     estimated.node_labels[i] = findfirst(x->x==estimated.node_labels[i], sorted_groups)
@@ -168,6 +170,12 @@ mvberns_sorted = mvberns[sorted_groups, sorted_groups]
 marginals_sorted = marginals[sorted_groups, sorted_groups]
 correlation_sorted = correlation[sorted_groups, sorted_groups]
 
+
+mvberns_block = MVBernoulli.from_tabulation.(block_estimated.θ)[
+    sorted_groups, sorted_groups]
+marginals_block = MVBernoulli.marginals.(mvberns_block)
+correlation_block = [c[3] for c in MVBernoulli.correlation_matrix.(mvberns_block)]
+
 include("utils.jl")
 P = zeros(n, n, 3)
 P[:, :, 1] = get_p_matrix([m[1] for m in marginals_sorted], estimated.node_labels)
@@ -181,6 +189,10 @@ P_mom[:, :, 3] = get_p_matrix(
     [m.tabulation.p[4] for m in mvberns_sorted], estimated.node_labels)
 
 
+P_block = zeros(n, n, 3)
+P_block[:, :, 1] = get_p_matrix([m[1] for m in marginals_block], estimated.node_labels)
+P_block[:, :, 2] = get_p_matrix([m[2] for m in marginals_block], estimated.node_labels)
+P_block[:, :, 3] = get_p_matrix(correlation_block, estimated.node_labels)
 
 ## main plot
 A_plot_big = deepcopy(A)
@@ -192,13 +204,24 @@ dict_name = Dict([0 => "None", 1 => "Genotype", 2 => "Phenotype", 3 => "Both"])
 A_plot_string = [dict_name[a] for a in A_plot]
 
 
-function make_box_corrs(corr_value,P)
+function make_box_corrs(corr_value,P; split_middle = true)
     first_node_block = Tuple(findfirst(
         x -> x == corr_value, P[sorted_labels, sorted_labels, 3]))
     last_node_block = Tuple(findlast(
         x -> x == corr_value, P[sorted_labels, sorted_labels, 3]))
-    return BBox(
-        first_node_block[1], last_node_block[1], first_node_block[2], last_node_block[2])
+    if split_middle
+        breaks = [(first_node_block[1]+last_node_block[1]) ÷ 2]
+    else
+        breaks = []
+    end
+    if isempty(breaks)
+        boxes = [BBox(first_node_block[1], last_node_block[1], first_node_block[2], last_node_block[2])]
+    else
+        boxes = [BBox(first_node_block[1], breaks[1], first_node_block[2], breaks[1]),
+                BBox(breaks[1], last_node_block[1], breaks[1], last_node_block[2])]
+    end
+    return boxes
+
 end
 
 ##
@@ -226,8 +249,11 @@ with_theme(theme_latexfonts()) do
         colormap = colormap_corr, colorrange = corr_range)
 
     for c in corrs_values[1:1]
-        box_corrs = make_box_corrs(c, P)
-        wireframe!(ax, box_corrs, color = :red)
+        box_corrs = make_box_corrs(c, P; split_middle = true)
+        for b in box_corrs
+            #wireframe!(ax, b, color = :red)
+        end
+
     end
     cb = Colorbar(fig[2, 1];
         colormap = Reverse(cgrad(:okabe_ito, 4, categorical = true)),
@@ -243,8 +269,48 @@ with_theme(theme_latexfonts()) do
         colormap = colormap_corr, vertical = false, width = Relative(1.0), flipaxis = false)
     #colgap!(fig.layout, 0)
     display(fig)
-    save(joinpath(@__DIR__, "diseasome_all_in_one.pdf"), fig)
     save(joinpath(@__DIR__, "diseasome_all_in_one.png"), fig, px_per_unit = 2)
+end
+
+##
+
+with_theme(theme_latexfonts()) do
+    fig = Figure(size = (930, 360), fontsize = 16)
+    colormap = :lipari
+    colormap_corr = :balance
+    corrs_values = sort([c for c in correlation_sorted if !isnan(c)], rev = true)
+    max_abs_corr = max(0.5, maximum(abs.(corrs_values)))
+    corr_range = (-max_abs_corr, max_abs_corr)
+    ax = Axis(fig[1, 1], aspect = 1, title = "Observed network")
+    ax1 = Axis(fig[1, 2], aspect = 1, title = "Fitted genotype layer")
+    ax2 = Axis(fig[1, 3], aspect = 1, title = "Fitted phenotype layer")
+    ax3 = Axis(fig[1, 4], aspect = 1, title = "Fitted correlation")
+    hidedecorations!.([ax, ax1, ax2, ax3])
+
+    heatmap!(ax, A_plot[sorted_labels, sorted_labels],
+        colormap = Makie.Categorical(Reverse(:okabe_ito)))
+    heatmap!(
+        ax1, P_block[sorted_labels, sorted_labels, 1], colormap = colormap, colorrange = (0, 1))
+    heatmap!(
+        ax2, P_block[sorted_labels, sorted_labels, 2], colormap = colormap, colorrange = (
+            0, 1))
+    heatmap!(ax3, P_block[sorted_labels, sorted_labels, 3],
+        colormap = colormap_corr, colorrange = corr_range)
+    cb = Colorbar(fig[2, 1];
+        colormap = Reverse(cgrad(:okabe_ito, 4, categorical = true)),
+        limits = (0, 4),
+        label = "Type of connection",
+        ticklabelsize = 12,
+        vertical = false, width = Relative(1.0),
+        flipaxis = false, ticks = (
+            [0.5, 1.4, 2.6, 3.5], ["None", "Genotype", "Phenotype", "Both"]))
+    Colorbar(fig[2, 2:3], colorrange = (0, 1),
+        colormap = colormap, vertical = false, flipaxis = false, width = Relative(0.7), label = "Probability")
+    Colorbar(fig[2, 4], colorrange = corr_range, label = "Correlation",
+        colormap = colormap_corr, vertical = false, width = Relative(1.0), flipaxis = false)
+    #colgap!(fig.layout, 0)
+    display(fig)
+    save(joinpath(@__DIR__, "diseasome_fit_block_model.png"), fig, px_per_unit = 2)
 end
 
 
@@ -267,7 +333,10 @@ with_theme(theme_latexfonts()) do
 
     for c in corrs_values[1:1]
         box_corrs = make_box_corrs(c, P)
-        wireframe!(ax, box_corrs, color = :red)
+        for b in box_corrs
+            wireframe!(ax, b, color = :red)
+            #wireframe!(ax2, b, color = :red)
+        end
     end
     cb = Colorbar(fig[1, 0];
         colormap = Reverse(cgrad(:okabe_ito, 4, categorical = true)),
@@ -311,7 +380,13 @@ with_theme(theme_latexfonts()) do
 
     for c in corrs_values[1:1]
         box_corrs = make_box_corrs(c, P)
-        wireframe!(ax, box_corrs, color = :red)
+        for b in box_corrs
+            wireframe!(ax, b, color = :red)
+            wireframe!(ax1, b, color = :red)
+            wireframe!(ax2, b, color = :red)
+            wireframe!(ax3, b, color = :red)
+        end
+
     end
     cb = Colorbar(fig[2, 1];
         colormap = Reverse(cgrad(:okabe_ito, 4, categorical = true)),
@@ -363,9 +438,9 @@ using Latexify
 k = length(unique(estimated.node_labels))
 
 df = DataFrame(Community = 1:k,Diseases = [join(diseases_names[findall(estimated.node_labels .== i)], ", ") for i in 1:k])
-latexify(df; env = :table, latex = false)
+print(latexify(df; env = :table, latex = false))
 
-include(joinpath(path_to_data_folder,"communities.jl"))
+include(joinpath(path_to_data_folder,"communities.jl"));
 ##
 
 corrs_values = sort([c for c in correlation_sorted if !isnan(c)],
