@@ -57,6 +57,19 @@ function get_tabulation(x, y)
 end
 
 
+function get_independent(x,y)
+    tabulation = get_tabulation(x,y)
+    mvbern = MVBernoulli.from_tabulation(tabulation)
+    marginals = MVBernoulli.marginals(mvbern)
+    tabulation = zeros(4)
+    tabulation[1] = (1-marginals[1])*(1-marginals[2])
+    tabulation[2] = marginals[1]*(1-marginals[2])
+    tabulation[3] = (1-marginals[1])*marginals[2]
+    tabulation[4] = marginals[1]*marginals[2]
+    return tabulation
+end
+
+
 
 
 function get_tabulation_extreme_correlation(x,y)
@@ -108,7 +121,7 @@ n = 100
 w = zeros((n, n, 4))
 for i in 1:n
     for j in 1:n
-        w[i, j, :] = get_tabulation(i / n, j / n)
+        w[i, j, :] = get_independent(i / n, j / n)
     end
 end
 
@@ -126,7 +139,7 @@ cb = Colorbar(f[1:2, end+1], colorrange = (0, 1), colormap = :lipari, vertical =
 display(f)
 
 
-_, P, A = get_ground_truth_and_adj(100)
+_, P, A = get_ground_truth_and_adj(100, get_independent)
 display(display_approx_and_data(P, A, 1:100, label = "Ground truth, n = 100"))
 
 
@@ -135,7 +148,7 @@ display(display_approx_and_data(P, A, 1:100, label = "Ground truth, n = 100"))
 
 n_small = 300
 n = n_small
-_, P_true, A = get_ground_truth_and_adj(n)
+_, P_true, A = get_ground_truth_and_adj(n, get_independent)
 estimator, history = graphhist(A;
     starting_assignment_rule = EigenStart(),
     maxitr = Int(1e7),
@@ -164,7 +177,7 @@ mvberns_block = MVBernoulli.from_tabulation.(estimated_block.θ)
 P_tabulation_true = zeros(n, n, 4)
 for i in 1:n
     for j in 1:n
-        P_tabulation_true[i, j, :] = get_tabulation(i / n, j / n)
+        P_tabulation_true[i, j, :] = get_independent(i / n, j / n)
     end
 end
 
@@ -178,14 +191,16 @@ for i in 1:4
         [m.tabulation.p[i] for m in mvberns_block], estimated_block.node_labels)[sorted_labels_block, sorted_labels_block]
 end
 
+##
+
 with_theme(theme_latexfonts()) do
     colormap = :lipari
     fig = Figure(size = (600, 300), fontsize = 16)
-    ax11 = Axis(fig[1, 1], aspect = 1, title = L"w^{(1)}", ylabel = L"W")
+    ax11 = Axis(fig[1, 1], aspect = 1, title = L"w^{(1)}", ylabel = "SBM")
     ax12 = Axis(fig[1, 2], aspect = 1, title = L"w^{(2)}")
     ax13 = Axis(fig[1, 3], aspect = 1, title = L"w^{(3)}")
     ax14 = Axis(fig[1, 4], aspect = 1, title = L"w^{(4)}")
-    ax21 = Axis(fig[2, 1], aspect = 1, ylabel = L"\hat{W}")
+    ax21 = Axis(fig[2, 1], aspect = 1, ylabel = "SSM")
     ax22 = Axis(fig[2, 2], aspect = 1)
     ax23 = Axis(fig[2, 3], aspect = 1)
     ax24 = Axis(fig[2, 4], aspect = 1)
@@ -208,12 +223,12 @@ with_theme(theme_latexfonts()) do
         colormap = colormap, vertical = true, flipaxis = true, height = Relative(0.8))
     display(fig)
     if SAVE_FIG
-        save("experiments/decorated_graphon_and_approx.png", fig, px_per_unit = 2)
+        save("experiments/decorated_graphon_and_approx_independent.png", fig, px_per_unit = 2)
     end
 end
 
 
-
+##
 with_theme(theme_latexfonts()) do
     colormap = :lipari
     fig = Figure(size = (600, 300), fontsize = 16)
@@ -248,7 +263,7 @@ with_theme(theme_latexfonts()) do
         colormap = colormap, vertical = true, flipaxis = true, height = Relative(0.8))
     display(fig)
     if SAVE_FIG
-        save("experiments/SBM_SSM.png", fig, px_per_unit = 2)
+        save("experiments/SBM_SSM_independent.png", fig, px_per_unit = 2)
     end
 end
 ##
@@ -259,7 +274,7 @@ end
 n_big = 500
 n = n_big
 
-_, P_true, A = get_ground_truth_and_adj(n)
+_, P_true, A = get_ground_truth_and_adj(n, get_independent)
 estimator_big, history = graphhist(A;
     starting_assignment_rule = EigenStart(),
     maxitr = Int(1e7),
@@ -329,8 +344,52 @@ with_theme(theme_latexfonts()) do
     display(fig)
     if SAVE_FIG
         #save("experiments/ground_truth_and_estimated.pdf", fig)
-        save("experiments/ground_truth_and_estimated.png", fig, px_per_unit = 2)
+        save("experiments/ground_truth_and_estimated_independent.png", fig, px_per_unit = 2)
     end
 end
 
 ##
+
+ns = [100, 300, 500]
+
+_, P_true, A = get_ground_truth_and_adj(500, get_tabulation_extreme_correlation)
+true_correlation = P_true[:, :, 3]
+estimators = []
+
+for (index, n) in enumerate(ns)
+    _, P_true, A = get_ground_truth_and_adj(n, get_tabulation_extreme_correlation)
+    estimator, history = graphhist(A;
+        starting_assignment_rule = EigenStart(),
+        maxitr = Int(1e7),
+        stop_rule = PreviousBestValue(10000))
+
+    estimated, bic_values = NetworkHistogram.get_best_smoothed_estimator(estimator, A)
+    push!(estimators, estimated)
+end
+
+##
+
+order_sorting = [false,false,false]
+
+with_theme(theme_latexfonts()) do
+    fig = Figure(size = (800, 250), fontsize = 16)
+
+    ax = Axis(fig[1, 0], aspect = 1, title = L"\text{Ground truth}")
+    heatmap!(ax, true_correlation,
+        colormap = :balance, colorrange = (-1, 1))
+    hidedecorations!(ax)
+    for (index,estimator) in enumerate(estimators)
+        correlation = get_p_matrix([m[3] for m in MVBernoulli.correlation_matrix.(MVBernoulli.from_tabulation.(estimator.θ))], estimator.node_labels)
+        sorted_labels = sortperm(estimator.node_labels, rev = order_sorting[index])
+        ax = Axis(fig[1, index], aspect = 1, title = L"n = %$(ns[index])")
+        hidedecorations!(ax)
+        heatmap!(ax, correlation[sorted_labels,sorted_labels], colormap = :balance, colorrange = (-1, 1))
+    end
+    Colorbar(fig[1,end+1], colorrange = (-1.0, 1.0),
+        colormap = :balance, vertical = true, flipaxis = true, height = Relative(0.8),
+        ticks = [-1.0, 0.0, 1.0])
+    colgap!(fig.layout, Relative(0.01))
+    save("experiments/extreme_corr_simulation.png", fig, px_per_unit = 2)
+display(fig)
+
+end
