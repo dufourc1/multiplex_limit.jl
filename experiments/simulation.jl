@@ -12,7 +12,7 @@ Random.seed!(12345)
 include("utils.jl")
 
 
-SAVE_FIG = true
+SAVE_FIG = false
 
 function display_approx_and_data(P, A, sorting; label = "", colormap = :lipari)
     fig = Figure(size = (800, 500))
@@ -196,7 +196,7 @@ end
 with_theme(theme_latexfonts()) do
     colormap = :lipari
     fig = Figure(size = (600, 300), fontsize = 16)
-    ax11 = Axis(fig[1, 1], aspect = 1, title = L"w^{(1)}", ylabel = "SBM")
+    ax11 = Axis(fig[1, 1], aspect = 1, title = L"w^{(1)}", ylabel = L"W^*")
     ax12 = Axis(fig[1, 2], aspect = 1, title = L"w^{(2)}")
     ax13 = Axis(fig[1, 3], aspect = 1, title = L"w^{(3)}")
     ax14 = Axis(fig[1, 4], aspect = 1, title = L"w^{(4)}")

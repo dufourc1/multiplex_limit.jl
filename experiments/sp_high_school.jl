@@ -13,7 +13,7 @@ include("utils.jl")
 
 # if true, the incomplete observations are used
 # otherwise, only the students that appeared in the facebook and friendship survey layers are considered
-use_incomplete_observation = false
+use_incomplete_observation = true
 
 
 if !use_incomplete_observation
@@ -156,7 +156,7 @@ function make_fig_layers(A, layer_names = ["Layer $i" for i in size(A, 3)], line
     fig = Figure()
     axes = [Axis(fig[1, i], aspect = 1, title = layer_names[i]) for i in 1:size(A, 3)]
     for i in 1:size(A, 3)
-        heatmap!(axes[i], A[:, :, i], colormap = :binary)
+        heatmap!(axes[i], A[:, :, i], colormap = :lipari)
         if lines != :nothing
             for l in lines
                 hlines!(axes[i], l, color = :red, linewidth = 0.5)
@@ -256,7 +256,7 @@ names = ["Sorted by fit", "Sorted by class then fit", "Sorted by class"]
 for (k,sorting_indices) in enumerate(sortings)
     with_theme(theme_latexfonts()) do
         fig = Figure(size = (130+200*L, 250), fontsize = 14)
-        colormap = :binary
+        colormap = :lipari
         color_minor_lines = :blue
         color_major_lines = :black
         axes = [Axis(fig[1, i],
@@ -302,7 +302,7 @@ end
 
 with_theme(theme_latexfonts()) do
     fig = Figure(size = (130 + 200 * L, 250), fontsize = 14)
-    colormap = :binary
+    colormap = :lipari
     color_minor_lines = :blue
     color_major_lines = :black
     axes = [Axis(fig[1, i],
@@ -362,7 +362,7 @@ end
 
 for sorting in sortings[2:2]
     fig, ax, hm = heatmap(proba_not_connected[sorting, sorting],
-        colormap = :binary, show_axis = false, colorrange = (0, 1))
+        colormap = :lipari, show_axis = false, colorrange = (0, 1))
     for l in lines_all
         hlines!(ax, l, color = :red, linewidth = 0.5)
         vlines!(ax, l, color = :red, linewidth = 0.5)
@@ -379,7 +379,7 @@ end
 ## conditional probabilties
 
 layers_to_consider = [L-2,L-1,L]
-colormap = :binary
+colormap = :lipari
 sorting_cond_proba = sorted_by_class_then_fit
 mean_cond_proba = ones(length(layers_to_consider), length(layers_to_consider))
 
@@ -529,6 +529,7 @@ sorted_obs_contact = A_contact[
 titles = ["Wearables only", "All layers"]
 
 with_theme(theme_latexfonts()) do
+    colormap = :lipari
     fig = Figure(size = (600, 300), fontsize = 16)
     colormap = :lipari
     color_minor_lines = :blue
@@ -553,11 +554,11 @@ with_theme(theme_latexfonts()) do
         if i == 2
             hm = heatmap!(
                 axes[i], sorted_obs,
-                colormap = :binary)
+                colormap = colormap)
         elseif i == 1
             hm = heatmap!(
                 axes[i], sorted_obs_contact,
-                colormap = :binary)
+                colormap = colormap)
         end
     end
     display(fig)
@@ -573,7 +574,7 @@ to_plot = [P_contact[sorted_by_class_then_fit_contact, sorted_by_class_then_fit_
 indices = [(1, 1), (1, 2), (2, 1), (2, 2)]
 with_theme(theme_latexfonts()) do
     fig = Figure(size = (600, 550), fontsize = 16)
-    colormap = :binary
+    colormap = :lipari
     color_minor_lines = :blue
     color_major_lines = :black
     axes = [Axis(fig[indices[i]...],
@@ -624,7 +625,7 @@ titles = ["Only face-to-face", "All layers"]
 
 with_theme(theme_latexfonts()) do
     fig = Figure(size = (130 + 200 * 2, 250), fontsize = 16)
-    colormap = :binary
+    colormap = :lipari
     color_minor_lines = :blue
     color_major_lines = :black
     axes = [Axis(fig[1, i],
