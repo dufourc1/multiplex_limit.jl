@@ -1,10 +1,11 @@
-# multiplex_limit
+# Code for "Inference for decorated graphs and application to multiplex networks" (Dufour and Olhede, 2024)
 
-[![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://dufourc1.github.io/multiplex_limit.jl/stable/)
-[![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://dufourc1.github.io/multiplex_limit.jl/dev/)
-[![Build Status](https://github.com/dufourc1/multiplex_limit.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/dufourc1/multiplex_limit.jl/actions/workflows/CI.yml?query=branch%3Amain)
-[![Coverage](https://codecov.io/gh/dufourc1/multiplex_limit.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/dufourc1/multiplex_limit.jl)
+The images in the paper were done with `Julia  1.10.1` and the manifest file is provided.
+
+(Please note that a recent change in `NetworkHistogram.jl` was made in the computation of the initial bandwidth. To 
+get exactly the results from the paper, use `> add NetworkHistogram#legacy_bandwidth` when installing the package.)
 
 
-
-Images with Julia  1.10.3
+To run the data analysis experiments, you need to download the data from the following links, and put it in a `data` folder in the root directory of the project:
+- Multiplex network of human diseases [https://github.com/manlius/MultiplexDiseasome/tree/master](https://github.com/manlius/MultiplexDiseasome/tree/master)
+- Sociopattern high school contact dataset [https://networks.skewed.de/net/sp_high_school](https://networks.skewed.de/net/sp_high_school)

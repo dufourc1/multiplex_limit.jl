@@ -9,10 +9,14 @@ using Random
 Random.seed!(1234)
 
 
+if VERSION != v"1.10.1"
+    @warn "experiments were run with Julia 1.10.1, you are currently running $VERSION"
+end
+
 display_fig = false
 
 path_to_current_folder = @__DIR__
-path_to_figure_folder = joinpath(path_to_current_folder, "../figures/sp_high_school/")
+path_to_figure_folder = joinpath(path_to_current_folder, "../figures/")
 path_to_data_folder = joinpath(path_to_current_folder, "../data")
 
 include(joinpath(path_to_current_folder, "utils.jl"))
@@ -314,13 +318,13 @@ for (k,sorting_indices) in enumerate(sortings)
             display(fig)
         end
         if names[k] == "Sorted by class then fit"
-            save(joinpath(path_to_figure_folder, "sp_high_school$postfix_file_name.png"), fig, px_per_unit = 2)
+            save(joinpath(path_to_figure_folder, "Fig5_marginal_probabilities$postfix_file_name.png"), fig, px_per_unit = 2)
         elseif names[k] == "Sorted by class"
-            save(
-                joinpath(path_to_figure_folder,
-                    "sp_high_school_sorted_by_class$postfix_file_name.png"),
-                fig,
-                px_per_unit = 2)
+            #save(
+            #    joinpath(path_to_figure_folder,
+            #        "sp_high_school_sorted_by_class$postfix_file_name.png"),
+            #    fig,
+            #    px_per_unit = 2)
         end
     end
 end
@@ -448,9 +452,9 @@ with_theme(theme_latexfonts()) do
     if display_fig
         display(fig)
     end
-    save(
-        joinpath(path_to_figure_folder, "sp_high_school_cond_proba$postfix_file_name.png"),
-        fig, px_per_unit = 2)
+    #save(
+    #    joinpath(path_to_figure_folder, "sp_high_school_cond_proba$postfix_file_name.png"),
+    #    fig, px_per_unit = 2)
 end
 
 
@@ -478,9 +482,9 @@ end
 if display_fig
     display(fig)
 end
-save(
-    joinpath(path_to_figure_folder, "sp_high_school_mean_cond_proba$postfix_file_name.png"),
-    fig, px_per_unit = 2)
+#save(
+#    joinpath(path_to_figure_folder, "sp_high_school_mean_cond_proba$postfix_file_name.png"),
+#    fig, px_per_unit = 2)
 
 ## Comparison with fit only on the contact layer
 
@@ -606,11 +610,11 @@ with_theme(theme_latexfonts()) do
     if display_fig
         display(fig)
     end
-    save(
-        joinpath(path_to_figure_folder,
-            "sp_high_school_contact_sorted_obs$postfix_file_name.png"),
-        fig,
-        px_per_unit = 2)
+    #save(
+    #    joinpath(path_to_figure_folder,
+    #        "sp_high_school_contact_sorted_obs$postfix_file_name.png"),
+    #    fig,
+    #    px_per_unit = 2)
 end
 
 ##
@@ -665,8 +669,8 @@ with_theme(theme_latexfonts()) do
     if display_fig
         display(fig)
     end
-    save(joinpath(path_to_figure_folder, "sp_high_school_contact$postfix_file_name.png"),
-        fig, px_per_unit = 2)
+    #save(joinpath(path_to_figure_folder, "sp_high_school_contact$postfix_file_name.png"),
+    #    fig, px_per_unit = 2)
 end
 
 
@@ -727,7 +731,7 @@ with_theme(theme_latexfonts()) do
     end
     save(
         joinpath(
-            path_to_figure_folder, "sp_high_school_contact_just_fit$postfix_file_name.png"),
+            path_to_figure_folder, "Fig6_comparison_ours_vs_graphon$postfix_file_name.png"),
         fig,
         px_per_unit = 2)
 end

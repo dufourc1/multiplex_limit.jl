@@ -5,13 +5,18 @@ using CairoMakie
 using Random
 Random.seed!(1234)
 using ParallelKMeans
+
+
+if VERSION != v"1.10.1"
+    @warn "experiments were run with Julia 1.10.1, you are currently running $VERSION"
+end
 ##
 
 display_fig = false
 
 # Load the data
 path_to_current_folder = @__DIR__
-path_to_figure_folder = joinpath(path_to_current_folder, "../figures/multiplex_human_diseases/")
+path_to_figure_folder = joinpath(path_to_current_folder, "../figures/")
 path_to_data_folder = joinpath(path_to_current_folder, "../data/", "MultiplexDiseasome-master")
 path_to_scratch = joinpath(path_to_current_folder, "../scratch")
 
@@ -29,7 +34,6 @@ omim_dataset = CSV.read(
 
 
 function get_genotype_and_symptoms_cooccurrence_matrix(dataset::DataFrame, file::String)
-    file = joinpath(path_to_scratch, file)
     if isfile(file)
         loaded = load(file)
         return loaded["node_names"], loaded["adj_genotype"], loaded["adj_symptoms"]
@@ -57,7 +61,7 @@ function get_genotype_and_symptoms_cooccurrence_matrix(dataset::DataFrame, file:
 end
 
 diseases_names, adj_genotype, adj_symptoms = get_genotype_and_symptoms_cooccurrence_matrix(
-    omim_dataset, joinpath(path_to_data_folder, "adj_omim_2.jld"))
+    omim_dataset, joinpath(path_to_scratch, "adj_omim_2.jld"))
 
 ##
 
@@ -291,7 +295,7 @@ with_theme(theme_latexfonts()) do
     end
     save(
         joinpath(path_to_figure_folder,
-            "supplemental_S3_Fig2_multiplex_human_diseases_observed_and_fitted_model.png"),
+            "S3_Fig2_multiplex_human_diseases_observed_and_fitted_model.png"),
         fig,
         px_per_unit = 2)
 end
@@ -336,7 +340,7 @@ with_theme(theme_latexfonts()) do
     if display_fig
         display(fig)
     end
-    save(joinpath(path_to_figure_folder, "multiplex_human_diseases_block_model_fit.png"), fig, px_per_unit = 2)
+    #save(joinpath(path_to_figure_folder, "multiplex_human_diseases_block_model_fit.png"), fig, px_per_unit = 2)
 end
 
 
@@ -463,7 +467,7 @@ with_theme(theme_latexfonts()) do
     end
     save(
         joinpath(path_to_figure_folder,
-            "supplemental_S3_Fig1_multiplex_human_diseases_different_ordering.png"),
+            "S3_Fig1_multiplex_human_diseases_different_ordering.png"),
         fig,
         px_per_unit = 2)
 end

@@ -8,6 +8,10 @@ using LaTeXStrings
 
 Random.seed!(12345)
 
+if VERSION != v"1.10.1"
+    @warn "experiments were run with Julia 1.10.1, you are currently running $VERSION"
+end
+
 path_to_current_folder = @__DIR__
 path_to_figure_folder = joinpath(path_to_current_folder, "../figures")
 path_to_data_folder = joinpath(path_to_current_folder, "../data")
@@ -15,7 +19,9 @@ path_to_data_folder = joinpath(path_to_current_folder, "../data")
 include(joinpath(path_to_current_folder,"utils.jl"))
 
 
-SAVE_FIG = false
+SAVE_FIG = true
+
+display_fig = false
 
 
 # W3 in Table 1 in paper
@@ -110,11 +116,15 @@ heatmap!(ax3, w[:, :, 3], colormap = :lipari, colorrange = (0, 1))
 heatmap!(ax4, w[:, :, 4], colormap = :lipari, colorrange = (0, 1))
 hidedecorations!.([ax1,ax2, ax3, ax4])
 cb = Colorbar(f[1:2, end+1], colorrange = (0, 1), colormap = :lipari, vertical = true, height = Relative(0.8))
-display(f)
+if display_fig
+    display(f)
+end
 
 
 _, P, A = get_ground_truth_and_adj(100, get_tabulation)
-display(display_approx_and_data(P, A, 1:100, label = "Ground truth, n = 100"))
+if display_fig
+    display(display_approx_and_data(P, A, 1:100, label = "Ground truth, n = 100"))
+end
 
 
 
@@ -195,9 +205,11 @@ with_theme(theme_latexfonts()) do
 
     Colorbar(gd[1, 1], colorrange = (0, 1),
         colormap = colormap, vertical = true, flipaxis = true, height = Relative(0.8))
-    display(fig)
+    if display_fig
+        display(fig)
+    end
     if SAVE_FIG
-        save(joinpath(path_to_figure_folder,"supplemental_S4_Fig4_w3_truth_and_ssm_approx.png"), fig, px_per_unit = 2)
+        save(joinpath(path_to_figure_folder,"S4_Fig4_w3_truth_and_ssm_approx.png"), fig, px_per_unit = 2)
     end
 end
 
@@ -235,7 +247,9 @@ with_theme(theme_latexfonts()) do
 
     Colorbar(gd[1, 1], colorrange = (0, 1),
         colormap = colormap, vertical = true, flipaxis = true, height = Relative(0.8))
-    display(fig)
+    if display_fig
+        display(fig)
+    end
     if SAVE_FIG
         save(joinpath(path_to_figure_folder,"Fig1_sbm_vs_ssm_W3.png"), fig, px_per_unit = 2)
     end
@@ -315,7 +329,9 @@ end
 
 with_theme(theme_latexfonts()) do
     fig = make_fig()
-    display(fig)
+    if display_fig
+        display(fig)
+    end
     if SAVE_FIG
         #save("experiments/ground_truth_and_estimated.pdf", fig)
         save(joinpath(path_to_figure_folder,"Fig3_ground_truth_and_estimated_W3.png"), fig, px_per_unit = 2)
@@ -363,7 +379,9 @@ with_theme(theme_latexfonts()) do
         colormap = :balance, vertical = true, flipaxis = true, height = Relative(0.8),
         ticks = [-1.0, 0.0, 1.0])
     colgap!(fig.layout, Relative(0.01))
-    save(joinpath(path_to_figure_folder,"supplementaL_S4_fig3_extreme_correlation.png"), fig, px_per_unit = 2)
-display(fig)
+    save(joinpath(path_to_figure_folder,"S4_fig3_extreme_correlation.png"), fig, px_per_unit = 2)
+if display_fig
+    display(fig)
+end
 
 end

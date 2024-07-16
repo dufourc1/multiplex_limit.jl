@@ -117,3 +117,34 @@ function softmax!(out::AbstractArray{T}, x::AbstractArray; dims = 1) where {T}
     tmp = dims isa Colon ? sum(out) : sum!(max_, out)
     out ./= tmp
 end
+
+
+function display_approx_and_data(P, A, sorting; label = "", colormap = :lipari)
+    fig = Figure(size = (800, 500))
+    ax = Axis(fig[1, 1], aspect = 1, title = "X_1", ylabel = "Histogram")
+    ax2 = Axis(fig[1, 2], aspect = 1, title = "X_2")
+    ax3 = Axis(fig[1, 3], aspect = 1, title = "Correlation")
+    ax4 = Axis(fig[2, 1], aspect = 1, ylabel = "Adjacency matrix")
+    ax5 = Axis(fig[2, 2], aspect = 1)
+    ax6 = Axis(fig[2, 3], aspect = 1)
+    heatmap!(ax, P[sorting, sorting, 1], colormap = colormap, colorrange = (0, 1))
+    heatmap!(ax2, P[sorting, sorting, 2], colormap = colormap, colorrange = (0, 1))
+    heatmap!(ax3, P[sorting, sorting, 3], colormap = :balance, colorrange = (-1, 1))
+    heatmap!(ax4, A[sorting, sorting, 1], colormap = :binary)
+    heatmap!(ax5, A[sorting, sorting, 2], colormap = :binary)
+    heatmap!(
+        ax6, A[sorting, sorting, 1] .* A[sorting, sorting, 2],
+        colormap = :binary)
+    Colorbar(fig[1, end + 1], colorrange = (0, 1),
+        colormap = colormap, vertical = true, height = Relative(0.8))
+    Colorbar(fig[2, end], colorrange = (-1, 1), label = "Correlation",
+        colormap = :balance, vertical = true, height = Relative(0.8))
+    hidedecorations!.([ax2, ax3, ax5, ax6])
+    hidedecorations!.([ax, ax4], label = false)
+    if label != ""
+        supertitle = Label(fig[1, :, Top()], label, font = :bold,
+            justification = :center,
+            padding = (0, 0, 30, 0), fontsize = 20)
+    end
+    return fig
+end

@@ -1,4 +1,3 @@
-
 using NetworkHistogram
 using Makie, CairoMakie
 using LinearAlgebra
@@ -10,8 +9,18 @@ using ProgressMeter
 using StatsBase
 using Base.Threads
 using ParallelKMeans
+using JLD
 
 Random.seed!(1234)
+
+if VERSION != v"1.10.1"
+    @warn "experiments were run with Julia 1.10.1, you are currently running $VERSION"
+end
+
+
+
+ns = 300:200:2000
+rep = 10
 
 
 path_to_current_folder = @__DIR__
@@ -26,7 +35,17 @@ end
 include(joinpath(path_to_current_folder, "utils.jl"))
 
 
-display_fig = true
+display_fig = false
+save_to_scratch = true
+load_from_scratch = false
+load_ref = false
+
+
+if load_ref
+    postfix = "_ref"
+else
+    postfix = ""
+end
 
 function w1(x,y)
     tabulation = zeros(4)
@@ -199,9 +218,6 @@ end
 
 ##
 
-ns = 300:200:2000
-rep = 10
-
 
 ns_smooth = ns[1]:ns[end]
 
@@ -219,21 +235,22 @@ resolution_shapes = ones(length(ns))
 beta = 1.6
 
 
+if !load_from_scratch
 
-@showprogress for (index, n) in enumerate(ns)
-    mse_n[index], std_mse[index], n_shapes[index], std_n_shapes[index], resolution_shapes[index], std_resolution_shapes[index] = estimate_and_mse(n, rep, w1, alpha = 1, beta=beta)
-    save(joinpath(path_to_scratch,"rates_simple_smoothed.jld"), "mse", mse_n, "std_mse", std_mse,
-        "n_shapes", n_shapes, "std_n_shapes", std_n_shapes, "resolution_shapes",
-        resolution_shapes, "std_resolution_shapes", std_resolution_shapes)
+    @showprogress for (index, n) in enumerate(ns)
+        mse_n[index], std_mse[index], n_shapes[index], std_n_shapes[index], resolution_shapes[index], std_resolution_shapes[index] = estimate_and_mse(n, rep, w1, alpha = 1, beta=beta)
+    end
+
+    if save_to_scratch
+        save(joinpath(path_to_scratch,"rates_w1.jld"), "mse", mse_n, "std_mse", std_mse,
+            "n_shapes", n_shapes, "std_n_shapes", std_n_shapes, "resolution_shapes",
+            resolution_shapes, "std_resolution_shapes", std_resolution_shapes)
+    end
+else
+    mse_n, std_mse, n_shapes, std_n_shapes, resolution_shapes, std_resolution_shapes = load(joinpath(path_to_scratch, "rates_w1$postfix.jld"), "mse", "std_mse", "n_shapes", "std_n_shapes", "resolution_shapes", "std_resolution_shapes")
 end
 
-save(joinpath(path_to_scratch,"rates_simple_smoothed.jld"), "mse", mse_n, "std_mse", std_mse,
-    "n_shapes", n_shapes, "std_n_shapes", std_n_shapes, "resolution_shapes",
-    resolution_shapes, "std_resolution_shapes", std_resolution_shapes)
-
-
 ##
-
 alpha = 1
 constant = 0.06
 L =4
@@ -265,7 +282,7 @@ with_theme(theme_latexfonts()) do
     if display_fig
         display(fig)
     end
-    save(joinpath(path_to_figure_folder,"rate_w1.png"), fig, px_per_unit = 2)
+    #save(joinpath(path_to_figure_folder,"rate_w1.png"), fig, px_per_unit = 2)
 end
 
 ##
@@ -281,19 +298,24 @@ std_resolution_shapes_complex = ones(length(ns))
 resolution_shapes_complex = ones(length(ns))
 
 
-@showprogress for (index, n) in enumerate(ns)
-    mse_n_complex[index], std_mse_complex[index], n_shapes_complex[index], std_n_shapes_complex[index], resolution_shapes_complex[index], std_resolution_shapes_complex[index] = estimate_and_mse(
-        n, rep, w2, alpha = 0.5, beta = beta_complex)
-    save(joinpath(path_to_scratch,"rates_complex_smoothed.jld"), "mse", mse_n_complex,
-        "std_mse", std_mse_complex, "n_shapes", n_shapes_complex, "std_n_shapes",
-        std_n_shapes_complex, "resolution_shapes", resolution_shapes_complex,
-        "std_resolution_shapes", std_resolution_shapes_complex)
-end
+if !load_from_scratch
 
-save(joinpath(path_to_scratch, "rates_complex_smoothed.jld"), "mse", mse_n_complex,
-    "std_mse", std_mse_complex, "n_shapes", n_shapes_complex, "std_n_shapes",
-    std_n_shapes_complex, "resolution_shapes", resolution_shapes_complex,
-    "std_resolution_shapes", std_resolution_shapes_complex)
+    @showprogress for (index, n) in enumerate(ns)
+        mse_n_complex[index], std_mse_complex[index], n_shapes_complex[index], std_n_shapes_complex[index], resolution_shapes_complex[index], std_resolution_shapes_complex[index] = estimate_and_mse(
+            n, rep, w2, alpha = 0.5, beta = beta_complex)
+    end
+
+    if save_to_scratch
+        save(joinpath(path_to_scratch, "rates_w2.jld"), "mse", mse_n_complex,
+            "std_mse", std_mse_complex, "n_shapes", n_shapes_complex, "std_n_shapes",
+            std_n_shapes_complex, "resolution_shapes", resolution_shapes_complex,
+            "std_resolution_shapes", std_resolution_shapes_complex)
+    end
+else
+    mse_n_complex, std_mse_complex, n_shapes_complex, std_n_shapes_complex, resolution_shapes_complex, std_resolution_shapes_complex = load(
+        joinpath(path_to_scratch, "rates_w2$postfix.jld"), "mse", "std_mse",
+        "n_shapes", "std_n_shapes", "resolution_shapes", "std_resolution_shapes")
+end
 
 ##
 
@@ -328,7 +350,7 @@ with_theme(theme_latexfonts()) do
     if display_fig
         display(fig)
     end
-    save(joinpath(path_to_scratch,"rate_w2.png"), fig, px_per_unit = 2)
+    #save(joinpath(path_to_scratch,"rate_w2.png"), fig, px_per_unit = 2)
 end
 
 
@@ -359,18 +381,24 @@ resolution_shapes_sin = ones(length(ns))
 std_resolution_shapes_sin = ones(length(ns))
 resolution_shapes_sin = ones(length(ns))
 
-@showprogress for (index, n) in enumerate(ns)
-    mse_n_sin[index], std_mse_sin[index],n_shapes_sin[index], std_n_shapes_sin[index], resolution_shapes_sin[index], std_resolution_shapes_sin[index] = estimate_and_mse(
-        n, rep, w3, alpha = 1, beta = beta_sin)
-    save(joinpath(path_to_scratch,"rates_sin_smoothed.jld"), "mse", mse_n_sin, "std_mse", std_mse_sin,
-        "n_shapes", n_shapes_sin, "std_n_shapes", std_n_shapes_sin, "resolution_shapes",
-        resolution_shapes_sin, "std_resolution_shapes", std_resolution_shapes_sin)
-end
 
-save(joinpath(path_to_scratch, "rates_sin_smoothed.jld"),
-    "mse", mse_n_sin, "std_mse", std_mse_sin,
-    "n_shapes", n_shapes_sin, "std_n_shapes", std_n_shapes_sin, "resolution_shapes",
-    resolution_shapes_sin, "std_resolution_shapes", std_resolution_shapes_sin)
+if !load_from_scratch
+    @showprogress for (index, n) in enumerate(ns)
+        mse_n_sin[index], std_mse_sin[index],n_shapes_sin[index], std_n_shapes_sin[index], resolution_shapes_sin[index], std_resolution_shapes_sin[index] = estimate_and_mse(
+            n, rep, w3, alpha = 1, beta = beta_sin)
+    end
+
+    if save_to_scratch
+        save(joinpath(path_to_scratch, "rates_w3.jld"),
+            "mse", mse_n_sin, "std_mse", std_mse_sin,
+            "n_shapes", n_shapes_sin, "std_n_shapes", std_n_shapes_sin, "resolution_shapes",
+            resolution_shapes_sin, "std_resolution_shapes", std_resolution_shapes_sin)
+    end
+else
+    mse_n_sin, std_mse_sin, n_shapes_sin, std_n_shapes_sin, resolution_shapes_sin, std_resolution_shapes_sin = load(
+        joinpath(path_to_scratch, "rates_w3$postfix.jld"), "mse", "std_mse",
+        "n_shapes", "std_n_shapes", "resolution_shapes", "std_resolution_shapes")
+end
 
 ##
 
@@ -380,7 +408,7 @@ constant_sin = 0.06
 
 power_holder_smooth_sin = -2 * alpha_sin / (alpha_sin + 1)
 upper_bound_sin = (log.(ns) ./ ns .+ L * ns .^ power_holder_smooth_sin) *
-                      constant_sin
+                    constant_sin
 
 upper_bound_sin_smooth = (log.(ns_smooth) ./ ns_smooth .+ L * ns_smooth .^ power_holder_smooth_sin) * constant_sin
 
@@ -405,11 +433,14 @@ with_theme(theme_latexfonts()) do
     if display_fig
         display(fig)
     end
-    save(joinpath(path_to_figure_folder,"rates_w3.png"), fig, px_per_unit = 2)
+    #save(joinpath(path_to_figure_folder,"rates_w3.png"), fig, px_per_unit = 2)
 end
 
-
 ##
+
+
+
+
 
 function show_mse_upper_bound!(axis,mse_to_plot, std_mse_to_plot, ns, upper_bound_to_plot, ns_ub,
                                 color_mse = :black, color_upper_bound = :red, alpha = 1,
@@ -470,8 +501,8 @@ for show_std in [true,false]
         if display_fig
             display(fig)
         end
-        file_name = show_std ? "experiments/multiplex_limit_rate_all_std.png" : "experiments/multiplex_limit_rate_all.png"
-        save(joinpath(path_to_figure_folder,file_name,) fig, px_per_unit = 2)
+        file_name = show_std ? "Fig2_rates_std.png" : "Fig2_rates.png"
+        save(joinpath(path_to_figure_folder,file_name), fig, px_per_unit = 2)
     end
 
 end
@@ -507,7 +538,7 @@ with_theme(theme_latexfonts()) do
     if display_fig
         display(fig)
     end
-    save(joinpath(path_to_figure_folder,"rate_ws_k_num_blocks.png"), fig, px_per_unit = 2)
+    #save(joinpath(path_to_figure_folder,"rate_ws_k_num_blocks.png"), fig, px_per_unit = 2)
 end
 
 
@@ -541,7 +572,7 @@ with_theme(theme_latexfonts()) do
     if display_fig
         display(fig)
     end
-    save(joinpath(path_to_figure_folder, "rate_ws_s_num_shapes.png"), fig, px_per_unit = 2)
+    #save(joinpath(path_to_figure_folder, "rate_ws_s_num_shapes.png"), fig, px_per_unit = 2)
 end
 
 
@@ -552,6 +583,6 @@ beta = log.(resolution_shapes) .* 2 ./ log.(n_shapes)
 beta_sin = log.(resolution_shapes_sin) .* 2 ./ log.(n_shapes_sin)
 beta_complex = log.(resolution_shapes_complex) .* 2 ./ log.(n_shapes_complex)
 
-println("β: $(mean(beta)) ± $(std(beta))")
-println("β_sin: $(mean(beta_sin)) ± $(std(beta_sin))")
-println("β_complex: $(mean(beta_complex)) ± $(std(beta_complex))")
+println("β_w1: $(mean(beta)) ± $(std(beta))")
+println("β_w2: $(mean(beta_complex)) ± $(std(beta_complex))")
+println("β_w3: $(mean(beta_sin)) ± $(std(beta_sin))")
