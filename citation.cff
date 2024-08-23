@@ -5,8 +5,7 @@ cff-version: 1.2.0
 title: >-
   Inference for decorated graphs and application to
   multiplex networks
-message: 'If you use this software, please cite it as below.'
-type: software
+message: 'If this is useful for your research, please cite it as below.'
 authors:
   - given-names: Charles
     family-names: Dufour
