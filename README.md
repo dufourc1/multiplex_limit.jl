@@ -1,6 +1,6 @@
 # Code for "Inference for decorated graphs and application to multiplex networks" (Dufour and Olhede, 2024)
 
-The images in the paper were done with `Julia  1.10.1` and the manifest file is provided.
+The images in the paper were done with `Julia  1.10.3` and the manifest file is provided.
 
 To run the data analysis experiments, you need to download the data from the following links, and put it in a `data` folder in the root directory of the project:
 - Multiplex network of human diseases [https://github.com/manlius/MultiplexDiseasome/tree/master](https://github.com/manlius/MultiplexDiseasome/tree/master)
